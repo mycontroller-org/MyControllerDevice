@@ -1,0 +1,12 @@
+= MyControllerDevice
+
+== About
+
+*MyControllerDevice* is network driver for embedded devices to communicate with MyController.
+Currently it supports for ESP8266 via MQTT protocol
+
+=== Changes needed when compile
+When you compile you have to change the following settings on dependencies,
+
+==== https://github.com/knolleary/pubsubclient[pubsubclient]
+* Change `MQTT_MAX_PACKET_SIZE` to 512 bytes on https://github.com/knolleary/pubsubclient/blob/master/src/PubSubClient.h[PubSubClient.h]
