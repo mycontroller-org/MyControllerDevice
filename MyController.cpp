@@ -14,7 +14,7 @@
 PubSubClient mqttClient(espClient);
 uint32_t heartbeat = 0;
 uint32_t pong = 0;
-char* payloadNull = "";
+char PAYLOAD_NULL[1] = "";
 ESP8266WebServer _webServer(80);
 
 FirmwareConfig *_fc = (FirmwareConfig *) malloc(sizeof(FirmwareConfig));
@@ -24,8 +24,11 @@ char nodeEui[13] = "node-eui";
 char feedId[6] = FEED_ID;
 char _mqttServer[51];
 uint16_t _mqttPort = 1883;
+char _mqttUser[16];
+char _mqttPwd[16];
 bool _fwUpdateRunning = false;
 long _fwUpdateMillis = 0;
+unsigned long _lastMqttLoopRun = millis();
 
 char* getNodeEui(){
   return &nodeEui[0];
@@ -39,6 +42,9 @@ MyController::MyController() {
 #endif
 
 void MyController::loop() {
+  if(!init_done){
+    initialize();
+  }
   #ifdef ENABLE_DEBUG
     if((millis() - milliOld) >= 5000){
       MC_SERIAL.printf("MC: FreeHeap:%d\n", ESP.getFreeHeap());
@@ -52,6 +58,7 @@ void MyController::loop() {
     reconnect();
   }else{
     mqttClient.loop();
+    _lastMqttLoopRun = millis();
   }
   checkTasks();
 }
@@ -78,16 +85,21 @@ bool MyController::initialize() {
   //Update MQTT port and server
   _mqttPort = hwReadConfigInteger(EEPROM_INTERNAL_ADDR_MQTT_PORT);
   hwReadConfigBlock((void *)_mqttServer, (void *)EEPROM_INTERNAL_ADDR_MQTT_SERVER, 51);
+  hwReadConfigBlock((void *)_mqttUser, (void *)EEPROM_INTERNAL_ADDR_MQTT_USERNAME, 16);
+  hwReadConfigBlock((void *)_mqttPwd, (void *)EEPROM_INTERNAL_ADDR_MQTT_PASSWORD, 16);
   mqttClient.setServer(_mqttServer, _mqttPort);
   mqttClient.setCallback(mqttMsgReceived);
   #ifdef ENABLE_INFO
-    MC_SERIAL.printf("MC: Configuration(NodeEUI:[%s], FeedId:[%s], Mqtt{Server:[%s], Port:[%d]})\n", nodeEui, feedId, _mqttServer, _mqttPort);
+    MC_SERIAL.printf("MC: Configuration(NodeEUI:[%s], FeedId:[%s], Mqtt{Server:[%s], Port:[%d], User:[%s]})\n", nodeEui, feedId, _mqttServer, _mqttPort, _mqttUser);
   #endif
   init_done = true;
   WiFi.mode(WIFI_STA);
   connectWiFi();
   reconnect();
   if(mqttClient.connected()){
+    before();
+    sendRSSI();
+    sendStatistics();
     mcPresentation();
   }
   #ifdef ENABLE_INFO
@@ -156,22 +168,41 @@ void updateConfigFromEEPROM(){
 void MyController::connectWiFi(){
     char _ssid[33];
     char _pwd[65];
+    uint8_t _bssid_eeprom[6];
     hwReadConfigBlock((void *)_ssid, (void *)EEPROM_INTERNAL_ADDR_WIFI_SSID, 33);
     hwReadConfigBlock((void *)_pwd, (void *)EEPROM_INTERNAL_ADDR_WIFI_PASSWORD, 65);
-
-    int n = WiFi.scanNetworks();
-    int quality = 0;
-    int index = -1;
+    hwReadConfigBlock((void *)_bssid_eeprom, (void *)EEPROM_INTERNAL_ADDR_WIFI_BSSID, 6);
+    uint8_t _bssid_set = hwReadConfig(EEPROM_INTERNAL_ADDR_WIFI_ENABLE_BSSID);
     uint8_t *_bssid = NULL;
-    for (int i = 0; i < n; i++) {
-      if(strcmp(WiFi.SSID(i).c_str(), _ssid) == 0 && quality < getRSSIasQuality(WiFi.RSSI(i))){
-        quality = getRSSIasQuality(WiFi.RSSI(i));
-        index = i;
+
+    if(_bssid_set == 0x01){
+      _bssid = _bssid_eeprom;
+    }else{
+      int n = WiFi.scanNetworks();
+      int quality = 0;
+      int index = -1;
+      #ifdef ENABLE_DEBUG
+        MC_SERIAL.printf("MC: Searching BSSID for ssid:[%s]\n", _ssid);
+      #endif
+      for (int i = 0; i < n; i++) {
+        if(strcmp(WiFi.SSID(i).c_str(), _ssid) == 0){
+          #ifdef ENABLE_DEBUG
+            MC_SERIAL.printf("MC: Found BSSID[%s] for ssid:[%s], RSSI:[%d -dBm, %d %]\n", WiFi.BSSIDstr(i).c_str(), _ssid, WiFi.RSSI(i), getRSSIasQuality(WiFi.RSSI(i)));
+          #endif
+          if(quality < getRSSIasQuality(WiFi.RSSI(i))){
+            quality = getRSSIasQuality(WiFi.RSSI(i));
+            index = i;
+          }
+        }
+      }
+      if(index != -1){
+        _bssid = WiFi.BSSID(index);
+        #ifdef ENABLE_DEBUG
+          MC_SERIAL.printf("MC: Selected bssid:[%s]\n", WiFi.BSSIDstr(index).c_str());
+        #endif
       }
     }
-    if(index != -1){
-      _bssid = WiFi.BSSID(index);
-    }
+
     
     #ifdef ENABLE_INFO
       MC_SERIAL.printf("MC: Connecting to WiFi with ");
@@ -202,13 +233,13 @@ void MyController::connectWiFi(){
     }
     #ifdef ENABLE_INFO
       MC_SERIAL.printf("%s\n", WiFi.isConnected() ? "OK" : "FAILED");
-      MC_SERIAL.printf("MC: WiFi BSSID:[%s], RSSI:[%d -dBm, %d %]\n", WiFi.BSSIDstr().c_str(), WiFi.RSSI(), getRSSIasQuality(WiFi.RSSI()));
+      MC_SERIAL.printf("MC: WiFi BSSID:[%s], RSSI:[%d dBm, %d %], IP:[%s]\n", WiFi.BSSIDstr().c_str(), WiFi.RSSI(), getRSSIasQuality(WiFi.RSSI()), WiFi.localIP().toString().c_str());
     #endif
 }
 
 //Reconnect
 void MyController::reconnect() {
-  boolean skip = false;
+  bool skip = false;
   // Loop until we're reconnected
   if (!WiFi.isConnected()) {
     #ifdef ENABLE_INFO
@@ -228,20 +259,16 @@ void MyController::reconnect() {
       MC_SERIAL.printf("MC: MQTT settings(Broker:[%s], Port:[%d])\n", _mqttServer, _mqttPort);
     #endif
     // Attempt to connect
-    char _user[16];
-    hwReadConfigBlock((void *)_user, (void *)EEPROM_INTERNAL_ADDR_MQTT_USERNAME, 16);
-    if(strlen(_user) == 0){
+    if(strlen(_mqttUser) == 0){
       #ifdef ENABLE_INFO
         MC_SERIAL.printf("MC: MQTT authenticating as anonymous\n");
       #endif
       mqttClient.connect(WiFi.hostname().c_str());
     }else{
       #ifdef ENABLE_INFO
-        MC_SERIAL.printf("MC: MQTT authenticating as user:[%s]\n", _user);
+        MC_SERIAL.printf("MC: MQTT authenticating as user:[%s]\n", _mqttUser);
       #endif
-      char _pwd[16];
-      hwReadConfigBlock((void *)_pwd, (void *)EEPROM_INTERNAL_ADDR_MQTT_PASSWORD, 16);
-      mqttClient.connect(WiFi.hostname().c_str(), _user, _pwd);
+      mqttClient.connect(WiFi.hostname().c_str(), _mqttUser, _mqttUser);
     }
     if (mqttClient.connected()) {
       #ifdef ENABLE_INFO
@@ -586,11 +613,19 @@ void handleSubmit(){
   //Save ssid
   String _ssid    = _webServer.arg("s").c_str();
   String _pwd     = _webServer.arg("p").c_str();  
+  String _bssid   = _webServer.arg("bs").c_str();
   String _bkr     = _webServer.arg("bkr").c_str();
   String _port    = _webServer.arg("port").c_str();
   String _feed    = _webServer.arg("feed").c_str();
   String _user    = _webServer.arg("user").c_str();
   String _bkrPwd  = _webServer.arg("bkrPwd").c_str();
+  
+  uint8_t _bssid_set = 0x00;
+  uint8_t _bssid_eeprom[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  if(_bssid.length() == 17){
+    parseBytes(_bssid.c_str(), ':', _bssid_eeprom, 6, 16);
+    _bssid_set = 0x01;
+  }
 
   if(_ssid.length() == 0){
     status = false;
@@ -620,9 +655,13 @@ void handleSubmit(){
     //Update password
     hwWriteConfigBlock((void *)_bkrPwd.c_str(), (void *)EEPROM_INTERNAL_ADDR_MQTT_PASSWORD, 16);
     
-    //Update ssid
+    //Update ssid and password
     hwWriteConfigBlock((void *)_ssid.c_str(), (void *)EEPROM_INTERNAL_ADDR_WIFI_SSID, 33);
-    hwWriteConfigBlock((void *)_pwd.c_str(), (void *)EEPROM_INTERNAL_ADDR_WIFI_PASSWORD, 65);    
+    hwWriteConfigBlock((void *)_pwd.c_str(), (void *)EEPROM_INTERNAL_ADDR_WIFI_PASSWORD, 65);
+    
+    //Update bssid
+    hwWriteConfig(EEPROM_INTERNAL_ADDR_WIFI_ENABLE_BSSID, _bssid_set);
+    hwWriteConfigBlock((void *)&_bssid_eeprom, (void *)EEPROM_INTERNAL_ADDR_WIFI_BSSID, 6);
     
     //Change state to set
     hwWriteConfig(EEPROM_INTERNAL_SYSTEM_RESET, 0x01);    
@@ -727,7 +766,12 @@ bool send(McMessage &message){
     #ifdef ENABLE_DEBUG
       MC_SERIAL.printf("MC: About to publish a topic:[%s], Payload:[%s]\n", _topic, payload);
     #endif
-    return mqttClient.publish(_topic, payload);
+    bool status = mqttClient.publish(_topic, payload);
+    if((millis() - _lastMqttLoopRun) > 700){
+      _lastMqttLoopRun = millis();
+      mqttClient.loop();  //Run this when user sends continues messages 
+    }
+    return status;
   }else{
     #ifdef ENABLE_INFO
       MC_SERIAL.printf("MC: MQTT client not connected, Failed to send message\n");
@@ -739,7 +783,7 @@ bool send(McMessage &message){
 void request(char* sensorId, char* subType){
   McMessage message;
   message.update(sensorId, C_REQ, subType);
-  message.set(payloadNull);
+  message.set(PAYLOAD_NULL);
   send(message);
 }
 
@@ -749,7 +793,7 @@ void present(char* subType, char* sensorId, char* _name){
   if(_name){
       message.set(_name);
   }else{
-      message.set(payloadNull);
+      message.set(PAYLOAD_NULL);
   }
   send(message);
 }
@@ -771,6 +815,17 @@ void mcPresentation(){
   send(message);
   //Call user's presentation
   presentation();
+}
+
+void parseBytes(const char* str, char sep, byte* bytes, int maxBytes, int base) {
+    for (int i = 0; i < maxBytes; i++) {
+        bytes[i] = strtoul(str, NULL, base);  // Convert byte
+        str = strchr(str, sep);               // Find next separator
+        if (str == NULL || *str == '\0') {
+            break;                            // No more separators, exit
+        }
+        str++;                                // Point to next character after separator
+    }
 }
 
 bool protocolParse(McMessage &message, char* topic, byte* payload, unsigned int length) {

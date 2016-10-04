@@ -14,11 +14,13 @@
 
 #include <EEPROM.h>
 
+
 bool protocolParse(McMessage &message, char* topic, byte* payload, unsigned int length);
 uint8_t protocolH2i(char c);
 void receive(McMessage &message) __attribute__((weak));
 void mcPresentation();
 void presentation() __attribute__((weak));
+void before() __attribute__((weak));
 void request(char* sensorId, char* subType);
 void present(char* subType, char* sensorId, char* name = NULL);
 void sendSketchInfo(char* name, char* version);
@@ -37,6 +39,7 @@ void factoryReset();
 bool isMqttConnected();
 bool isWifiConnected();
 void checkFirmwareUpgrade();
+void parseBytes(const char* str, char sep, byte* bytes, int maxBytes, int base);
 
 void configSetupManager();
 void handleInfo();
@@ -72,7 +75,7 @@ const char HTTP_SCRIPT[] PROGMEM          = "<script>function c(l){document.getE
 const char HTTP_HEAD_END[] PROGMEM        = "</head><body><div style='text-align:left;display:inline-block;min-width:260px;'>";
 const char HTTP_PORTAL_OPTIONS[] PROGMEM  = "<form action=\"/config\" method=\"get\"><button>Configure Device</button></form><br/><form action=\"/info\" method=\"get\"><button>Info</button></form>";
 const char HTTP_ITEM[] PROGMEM            = "<div><a href='#p' onclick='c(this)'>{v}</a>&nbsp;<span>[{b}]</span>&nbsp;<span class='q {i}'>{r}%</span></div>";
-const char HTTP_FORM_START[] PROGMEM      = "<form method='get' action='sconfig'><input id='s' name='s' length=32 placeholder='SSID'><br/><input id='p' name='p' length=64 type='password' placeholder='WiFi password'><br/><br/><input id='bkr' name='bkr' length=50 type='text' value='{svr}' placeholder='Server'><br/><input id='port' name='port' length=5 type='text'  value='{port}' placeholder='Port'><br/><input id='feed' name='feed' length=5 type='text' placeholder='Feed id'><br/><input id='user' name='user' length=15 type='text' placeholder='Username'><br/><input id='bkrPwd' name='bkrPwd' length=15 type='password' placeholder='Password'>";
+const char HTTP_FORM_START[] PROGMEM      = "<form method='get' action='sconfig'><input id='s' name='s' length=32 placeholder='SSID'><br/><input id='p' name='p' length=64 type='password' placeholder='WiFi password'><br/><input id='bs' name='bs' length=20 placeholder='BSSID'><br/><br/><input id='bkr' name='bkr' length=50 type='text' value='{svr}' placeholder='Server'><br/><input id='port' name='port' length=5 type='text'  value='{port}' placeholder='Port'><br/><input id='feed' name='feed' length=5 type='text' placeholder='Feed id'><br/><input id='user' name='user' length=15 type='text' placeholder='Username'><br/><input id='bkrPwd' name='bkrPwd' length=15 type='password' placeholder='Password'>";
 const char HTTP_FORM_END[] PROGMEM        = "<br/><br/><button type='submit'>Save</button></form>";
 const char HTTP_SAVED[] PROGMEM           = "<div>Configurations Saved<br />Device will reboot and start in normal mode.<br />See you on MyController.org :)</div>";
 const char HTTP_END[] PROGMEM             = "</div></body></html>";
@@ -86,12 +89,14 @@ const char HTTP_END[] PROGMEM             = "</div></body></html>";
 extern PubSubClient mqttClient;
 extern uint32_t heartbeat;
 extern uint32_t pong;
-extern char* payloadNull;
+extern char PAYLOAD_NULL[1];
 extern char nodeEui[13];
 extern char feedId[6];
 extern ESP8266WebServer _webServer;
 extern char _mqttServer[51];
 extern uint16_t _mqttPort;
+extern char _mqttUser[16];
+extern char _mqttPwd[16];
 extern bool _fwUpdateRunning;
 extern long _fwUpdateMillis;
 
