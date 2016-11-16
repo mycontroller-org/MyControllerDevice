@@ -24,6 +24,7 @@ void McMessage::clear() {
     sensorId = NULL;
     type = NULL;
     subType = NULL;
+    ack = 0;
     (void)memset(data, 0u, sizeof(data));
 }
 
@@ -294,6 +295,19 @@ bool McMessage::isSensorOf(String _sensorId) {
 
 bool McMessage::isValid() {
   return valid;
+}
+
+McMessage& McMessage::setAck(uint8_t _ack) {
+  ack = _ack;
+  return *this;
+}
+
+bool McMessage::isAckRequest(){
+  return ack == ACK_REQUEST;
+}
+
+bool McMessage::isAckResponse(){
+  return ack == ACK_RESPONSE;
 }
 
 void McMessage::printOnSerial() {

@@ -151,7 +151,7 @@ void updateConfigFromEEPROM(){
     char arr[33] = "---------md5sum-not-set---------";
     memcpy(_fc->md5sum, arr, sizeof(arr));
     hwWriteConfigBlock((void *)_fc, (void *)EEPROM_INTERNAL_ADDR_FW_CONFIG, sizeof(FirmwareConfig));
-    
+
     //Update default settings for node EUI
     updateNodeEui(true);
     //Load default settings
@@ -309,8 +309,19 @@ void mqttMsgReceived(char* topic, byte* payload, unsigned int length) {
     _msg.printOnSerial();
   #endif
   if(_msg.isValid()){
+    if(_msg.isAckRequest()){
+      send(_msg.setAck(ACK_RESPONSE));
+      _msg.ack = NO_ACK; //Reset ack status
+    }else if(_msg.isAckResponse()){
+      //This ack response message. Just ignore for other than SET, REQ
+      if(_msg.isTypeOf(C_SET) || _msg.isTypeOf(C_REQ)){
+        receive(_msg); //Handover to callback
+      }
+      return;
+    }
     if(_msg.isTypeOf(C_SET) || _msg.isTypeOf(C_REQ)){
-      receive(_msg);
+      receive(_msg); //Handover to callback
+      return;
     }else if(_msg.isTypeOf(C_INTERNAL)){
       if(_msg.isSubTypeOf(I_HEARTBEAT)){
         _msg.update(BC_SENSOR, C_INTERNAL, I_HEARTBEAT_RESPONSE);
@@ -760,7 +771,7 @@ void configSetupManager(){
 bool send(McMessage &message){
   if(mqttClient.connected()){
     char _topic[MAX_TOPIC_LENGTH];
-    snprintf_P(_topic, MAX_TOPIC_LENGTH, PSTR("out_%s/%s/%s/%s/%s"), feedId, getNodeEui(), message.sensorId, message.type, message.subType);
+    snprintf_P(_topic, MAX_TOPIC_LENGTH, PSTR("out_%s/%s/%s/%s/%s/%d"), feedId, getNodeEui(), message.sensorId, message.type, message.subType, message.ack);
     char *payload = "";
     payload = message.getString(payload);   
     #ifdef ENABLE_DEBUG
@@ -836,8 +847,8 @@ bool protocolParse(McMessage &message, char* topic, byte* payload, unsigned int 
   uint8_t command = 0;
   uint8_t ack = 0;
   // Extract command data coming on mqtt
-  // mygateway1-in/9985114/wl/C_SET/V_TEXT
-  for (str = strtok_r(topic, "/", &p); str && i < 5; str = strtok_r(NULL, "/", &p)) {
+  // mygateway1-in/9985114/wl/C_SET/V_TEXT/ACK_NO
+  for (str = strtok_r(topic, "/", &p); str && i < 6; str = strtok_r(NULL, "/", &p)) {
   #ifdef ENABLE_TRACE
     MC_SERIAL.printf("MC: i:%d, str:%s\n", i, str);
   #endif
@@ -884,6 +895,8 @@ bool protocolParse(McMessage &message, char* topic, byte* payload, unsigned int 
           message.set((const char*)payload);
         }
         break;
+      case 5:
+        message.ack = atoi(str);
     }
     i++;
   }

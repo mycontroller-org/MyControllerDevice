@@ -125,6 +125,11 @@
 #define ST_IMAGE                      "ST_IMAGE"
 
 
+//ACK related flags
+#define NO_ACK 0
+#define ACK_REQUEST 1
+#define ACK_RESPONSE 2
+
 /// @brief Type of payload
 typedef enum {
   P_STRING          = 0,    //!< Payload type is string
@@ -209,6 +214,8 @@ public:
   bool isSubTypeOf(String subType);
   bool isSensorOf(String sensorId);
   bool isValid();
+  bool isAckRequest();
+  bool isAckResponse();
   void printOnSerial();
 
   // Setters for payload
@@ -221,11 +228,13 @@ public:
   McMessage& set(int32_t value);
   McMessage& set(uint16_t value);
   McMessage& set(int16_t value);
+  McMessage& setAck(uint8_t ack);
 
   char* sensorId;
   char* type;
   char* subType;
   uint16_t message_internal;
+  uint8_t ack = 0;
   bool valid = false;
 
   // Each message can transfer a payload. We add one extra byte for string
