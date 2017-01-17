@@ -2,11 +2,59 @@
 
 == About
 
-*MyControllerDevice* is network driver for embedded devices to communicate with MyController.
-Currently it supports for ESP8266 via MQTT protocol
+*MyControllerDevice* is network driver for embedded devices to communicate with MyController. You can make your own sensors network on top of embedded hardwares. Currently this library supports for ESP8266 via MQTT protocol
 
-=== Changes needed when compile
+=== Dependencies
 When you compile you have to change the following settings on dependencies,
 
 ==== https://github.com/knolleary/pubsubclient[pubsubclient]
 * Change `MQTT_MAX_PACKET_SIZE` to 512 bytes on https://github.com/knolleary/pubsubclient/blob/master/src/PubSubClient.h[PubSubClient.h]
+
+== Quick start
+* Download dependencies to your arduino environment.
+* Download this library to your arduino library location
+* Have a look on example
+* Implement your code
+
+
+=== Add your code on this default code
+```
+#include <MyController.h>
+
+MyController mc;
+
+void before(){
+  //Your code before this library inialize
+}
+
+void presentation(){
+  //Presentation code, to send available sensors detail
+}
+
+void receiveTime(unsigned long mcTimestamp){
+  //Do something with received time
+}
+
+void receive(McMessage &message) {
+   //If MyController sends some data, you will receive here.
+}
+
+
+void setup() {
+  if(!isSystemConfigured()){
+    //You can check, does this node/device configured. If no you can display/blink some led from here.
+  }
+}
+
+void loop() {
+  mc.loop();
+  //You can add your logic here.
+}
+```
+
+==== Compile and update code to ESP8266
+* Select target board
+* click on compile and update
+
+==== OTA support
+If you have 4M of program space you can do OTA program. To use OTA you need MyController and very first you have burn firmware for your device from computer.
