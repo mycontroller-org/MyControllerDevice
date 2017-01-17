@@ -79,13 +79,13 @@ Once the firmware successfully uploaded to ESP8266, When you turn on the device.
 image::extra/images/esp_01.png[ESP AP on WiFi settings, height=720]
 
 ===== On browser open `192.168.4.1`
-image::extra/images/esp_02.png[192.168.4.1 on browser, height=720]
+image::extra/images/esp_02.png[192.168.4.1 on browser, height=320]
 
 ===== To know about device information click on `Info`
-image::extra/images/esp_03.png[ESP device info, height=720]
+image::extra/images/esp_03.png[ESP device info, height=420]
 
 ===== Configure actual AP settings and MQTT broker settings
 image::extra/images/esp_04.png[Ap and ESP settings, height=720]
 
 ===== When you save the settings, Self AP will get disabled and ESP8266 will connect with your AP and connect with MQTT broker (Here we use inbuilt MQTT broker)
-image::extra/images/esp_05.png[Final message, height=720]
+image::extra/images/esp_05.png[Final message, height=220]
