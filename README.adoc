@@ -58,3 +58,34 @@ void loop() {
 
 ==== OTA support
 If you have 4M of program space you can do OTA program. To use OTA you need MyController and very first you have burn firmware for your device from computer.
+
+== First time configuration
+We have to create gateway entry on MyController server and we have supply those settings to node/esp8266 one time.
+
+=== Gateway settings on MyController server
+Please note, here I have used MyController inbuilt MQTT broker. Which will not allow `anonymous` by defaylt. We have to enable `anonymous`. We can use with user details also. In the following screenshot I have shown as `anonymous`.
+We can use any MQTT broker.
+
+===== Allow anonymous
+image::extra/images/mc_02.png[Enable Anonymous on MyController MQTT broker]
+
+===== Gateway settings for ESP8266
+image::extra/images/mc_01.png[Gateway settings for ESP8266 device]
+
+=== Configuration on ESP8266
+Once the firmware successfully uploaded to ESP8266, When you turn on the device. We can see a Access Point(AP) somthing like `ESP_XXXXXX`(default password: `mycontroller`) this is your device AP. You have to connect your mobile or computer to update MyController and actual AP settings for your ESP8266. Once you have connected to ESP device AP, you have to enter the following IP on your browser `192.168.4.1`. Annd follow these steps,
+
+===== WiFi ESP_XXXXXX
+image::extra/images/esp_01.png[ESP AP on WiFi settings]
+
+===== On browser open `192.168.4.1`
+image::extra/images/esp_02.png[192.168.4.1 on browser]
+
+===== To know about device information click on `Info`
+image::extra/images/esp_03.png[ESP device info]
+
+===== Configure actual AP settings and MQTT broker settings
+image::extra/images/esp_04.png[Ap and ESP settings]
+
+===== When you save the settings, Self AP will get disabled and ESP8266 will connect with your AP and connect with MQTT broker (Here we use inbuilt MQTT broker)
+image::extra/images/esp_05.png[Final message]
