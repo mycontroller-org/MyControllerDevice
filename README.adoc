@@ -76,16 +76,16 @@ image::extra/images/mc_01.png[Gateway settings for ESP8266 device]
 Once the firmware successfully uploaded to ESP8266, When you turn on the device. We can see a Access Point(AP) somthing like `ESP_XXXXXX`(default password: `mycontroller`) this is your device AP. You have to connect your mobile or computer to update MyController and actual AP settings for your ESP8266. Once you have connected to ESP device AP, you have to enter the following IP on your browser `192.168.4.1`. Annd follow these steps,
 
 ===== WiFi ESP_XXXXXX
-image::extra/images/esp_01.png[ESP AP on WiFi settings]
+image::extra/images/esp_01.png[ESP AP on WiFi settings, height=720]
 
 ===== On browser open `192.168.4.1`
-image::extra/images/esp_02.png[192.168.4.1 on browser]
+image::extra/images/esp_02.png[192.168.4.1 on browser, height=720]
 
 ===== To know about device information click on `Info`
-image::extra/images/esp_03.png[ESP device info]
+image::extra/images/esp_03.png[ESP device info, height=720]
 
 ===== Configure actual AP settings and MQTT broker settings
-image::extra/images/esp_04.png[Ap and ESP settings]
+image::extra/images/esp_04.png[Ap and ESP settings, height=720]
 
 ===== When you save the settings, Self AP will get disabled and ESP8266 will connect with your AP and connect with MQTT broker (Here we use inbuilt MQTT broker)
-image::extra/images/esp_05.png[Final message]
+image::extra/images/esp_05.png[Final message, height=720]
