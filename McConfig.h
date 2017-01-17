@@ -2,41 +2,39 @@
 #define MC_CONFIG_H
 
 
+/* User configurable variables */
+/* ***************************************************************************** */
 // Enable DEBUG in sketch to show debug prints.
 #define ENABLE_INFO
 //#define ENABLE_DEBUG
 //#define ENABLE_TRACE
 
-#define MC_SERIAL Serial
 
-// Disable serial
+//Default serial port and baud rate
+#define MC_SERIAL Serial
+#define SERIAL_BAUD_RATE 115200
+// Disable serial port completely
 //#define MC_DISABLED_SERIAL
 
-// Turn off debug if serial pins is used for other stuff
-#ifdef MC_DISABLED_SERIAL
-#undef ENABLE_INFO
-#undef ENABLE_DEBUG
-#undef ENABLE_TRACE
-#undef MC_SERIAL
-#endif
-
-#ifndef SERIAL_BAUD_RATE
-#define SERIAL_BAUD_RATE 115200
-#endif
-
-
+// Enable vcc pin
 #define ENABLE_READ_VCC
 
+// When there is no configurations updated, this device will create AP to update configuration via mobile/computer
+// SSID will be serial of the ESP8266 device
 // Should be minimum of 8 char and maximum of 63 char
 #define CONFIGURATION_AP_PASSWORD "mycontroller"
 
+// Define factory reset pin.
+// You can configure any pin for factory reset. When you cannot access your device,
+// You reset your device settings and ask to produce AP to update new settings
 //#define FACTORY_RESET_PIN 0
 #define FACTORY_RESET_PIN_STATE 0
-#define FACTORY_RESET_TIME 9000
+#define FACTORY_RESET_TIME 1000*9  //hold the button 9 seconds
 
-//Default settings
-#define FEED_ID "mc" //Maximum allowed length 5 chars
-#define MQTT_BROKER_HOSTNAME "cloud.mycontroller.org"
+// MQTT settings, You can leave this as default. Until you do not need any change
+// Default settings
+#define FEED_ID "mc" //Maximum allowed length 5 chars. will be used as topic to publich and subscribe
+#define MQTT_BROKER_HOSTNAME "cloud.mycontroller.org" //MyController server ip
 #define MQTT_BROKER_PORT 1883
 //#define MQTT_SSL_ENABLED
 
@@ -46,6 +44,26 @@
 #define MAX_TOPIC_LENGTH 72
 
 #define MQTT_MAX_PACKET_SIZE 512 //This one is not working have to check it
+
+
+/* NO NEED TO TOUCH FROM HERE */
+/* ***************************************************************************** */
+
+// Turn off debug if serial pins is used for other stuff
+#ifdef MC_DISABLED_SERIAL
+#undef ENABLE_INFO
+#undef ENABLE_DEBUG
+#undef ENABLE_TRACE
+#undef MC_SERIAL
+#endif
+
+// If serial baud not defined take it as 115200
+#ifndef SERIAL_BAUD_RATE
+#define SERIAL_BAUD_RATE 115200
+#endif
+
+
+
 
 //System configuration
 #define SYSTEM_RESET 0xFF
