@@ -29,7 +29,7 @@
 // Define factory reset pin.
 // You can configure any pin for factory reset. When you cannot access your device,
 // You reset your device settings and ask to produce AP to update new settings
-#define FACTORY_RESET_PIN 0
+//#define FACTORY_RESET_PIN 0
 #define FACTORY_RESET_PIN_STATE 0
 #define FACTORY_RESET_TIME 1000*9  //hold the button 9 seconds
 
