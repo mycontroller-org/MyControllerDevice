@@ -21,6 +21,7 @@ FirmwareConfig *_fc = (FirmwareConfig *) malloc(sizeof(FirmwareConfig));
 RequestFWBlock fwRequest;
 
 char nodeEui[13] = "node-eui";
+uint8_t mDNSstatus = 0x00;
 char feedId[6] = FEED_ID;
 char _mqttServer[51];
 uint16_t _mqttPort = 1883;
@@ -29,6 +30,7 @@ char _mqttPwd[16];
 bool _fwUpdateRunning = false;
 long _fwUpdateMillis = 0;
 unsigned long _lastMqttLoopRun = millis();
+bool _mqttClientInit = false;
 
 char* getNodeEui(){
   return &nodeEui[0];
@@ -45,17 +47,17 @@ void MyController::loop() {
   if(!init_done){
     initialize();
   }
-  #ifdef ENABLE_DEBUG
+  #ifdef ENABLE_TRACE
     if((millis() - milliOld) >= 5000){
-      MC_SERIAL.printf("MC: FreeHeap:%d\n", ESP.getFreeHeap());
+      MC_SERIAL.printf("MC[T]: FreeHeap:%d\n", ESP.getFreeHeap());
       milliOld = millis();
     }    
   #endif
   if (!mqttClient.connected()) {
   #ifdef ENABLE_INFO
-    MC_SERIAL.printf("MC: MQTT failed! Retryting to connect...\n");
+    MC_SERIAL.printf("MC[I]: MQTT failed! Retryting to connect...\n");
   #endif
-    reconnect();
+    checkMQTT();
   }else{
     mqttClient.loop();
     _lastMqttLoopRun = millis();
@@ -63,39 +65,33 @@ void MyController::loop() {
   checkTasks();
 }
 
+bool discoverMyControllerServer(){
+  
+}
+
 bool MyController::initialize() {
   if(init_done){
   #ifdef ENABLE_INFO
-    MC_SERIAL.printf("MC: Already initialized!\n");
+    MC_SERIAL.printf("MC[I]: Already initialized!\n");
   #endif
     return false;
   }
+  //Initialize serial port
+  #ifndef MC_DISABLED_SERIAL
+    MC_SERIAL.begin(SERIAL_BAUD_RATE, SERIAL_8N1, SERIAL_FULL, 1);
+  #endif
   #ifdef ENABLE_INFO
-    MC_SERIAL.printf("\nMC: Booting system...\n");
+    MC_SERIAL.printf("\nMC[I]: Booting ESP8266 device...\n");
   #endif
   #ifdef NODE_EUI
     strcpy(nodeEui, NODE_EUI);
   #else
     strcpy(nodeEui, WiFi.hostname().c_str());
   #endif
-  #ifndef MC_DISABLED_SERIAL
-    MC_SERIAL.begin(SERIAL_BAUD_RATE);
-  #endif  
   updateConfigFromEEPROM();
-  //Update MQTT port and server
-  _mqttPort = hwReadConfigInteger(EEPROM_INTERNAL_ADDR_MQTT_PORT);
-  hwReadConfigBlock((void *)_mqttServer, (void *)EEPROM_INTERNAL_ADDR_MQTT_SERVER, 51);
-  hwReadConfigBlock((void *)_mqttUser, (void *)EEPROM_INTERNAL_ADDR_MQTT_USERNAME, 16);
-  hwReadConfigBlock((void *)_mqttPwd, (void *)EEPROM_INTERNAL_ADDR_MQTT_PASSWORD, 16);
-  mqttClient.setServer(_mqttServer, _mqttPort);
-  mqttClient.setCallback(mqttMsgReceived);
-  #ifdef ENABLE_INFO
-    MC_SERIAL.printf("MC: Configuration(NodeEUI:[%s], FeedId:[%s], Mqtt{Server:[%s], Port:[%d], User:[%s]})\n", nodeEui, feedId, _mqttServer, _mqttPort, _mqttUser);
-  #endif
   init_done = true;
   WiFi.mode(WIFI_STA);
-  connectWiFi();
-  reconnect();
+  checkMQTT();
   if(mqttClient.connected()){
     before();
     sendRSSI();
@@ -103,8 +99,17 @@ bool MyController::initialize() {
     mcPresentation();
   }
   #ifdef ENABLE_INFO
-    MC_SERIAL.printf("MC: Initialization done...\n");
+    MC_SERIAL.printf("MC[I]: Initialization done...\n");
   #endif
+}
+
+void mcDelay(long ms){
+  long start = 0;
+  while(start < ms){
+    delay(50);
+    checkTasks();
+    start += 50;
+  }
 }
 
 void checkTasks(){
@@ -122,6 +127,9 @@ void checkFactoryResetPin(){
     while(digitalRead(FACTORY_RESET_PIN) == FACTORY_RESET_PIN_STATE){
       delay(100);
       if((millis()-refMillis) >= FACTORY_RESET_TIME){
+        #ifdef ENABLE_INFO
+          MC_SERIAL.printf("\nMC[I]: Factory reset pin triggered by user\n");
+        #endif
         factoryReset();
       }
     }
@@ -137,7 +145,7 @@ void checkFirmwareUpgrade(){
     _fwUpdateRunning = false;
     Update.end();
     #ifdef ENABLE_INFO
-      MC_SERIAL.printf("MC: Firmware upgrade timeout...\n");
+      MC_SERIAL.printf("MC[I]: Firmware upgrade timeout...\n");
     #endif
   }
 }
@@ -158,6 +166,11 @@ void updateConfigFromEEPROM(){
     configSetupManager();
     return;
   }
+  //Update MQTT mDNS status
+  mDNSstatus = hwReadConfig(EEPROM_INTERNAL_ADDR_MQTT_MDNS);
+  #ifdef ENABLE_TRACE
+    MC_SERIAL.printf("MC[T]: MQTT mDNS status:[%d]\n", mDNSstatus);
+  #endif
   //Read node EUI
   updateNodeEui();
   //Read Feed id
@@ -182,12 +195,12 @@ void MyController::connectWiFi(){
       int quality = 0;
       int index = -1;
       #ifdef ENABLE_DEBUG
-        MC_SERIAL.printf("MC: Searching BSSID for ssid:[%s]\n", _ssid);
+        MC_SERIAL.printf("MC[D]: Searching BSSID for ssid:[%s]\n", _ssid);
       #endif
       for (int i = 0; i < n; i++) {
         if(strcmp(WiFi.SSID(i).c_str(), _ssid) == 0){
           #ifdef ENABLE_DEBUG
-            MC_SERIAL.printf("MC: Found BSSID[%s] for ssid:[%s], RSSI:[%d -dBm, %d %]\n", WiFi.BSSIDstr(i).c_str(), _ssid, WiFi.RSSI(i), getRSSIasQuality(WiFi.RSSI(i)));
+            MC_SERIAL.printf("MC[D]: Found BSSID[%s] for ssid:[%s], RSSI:[%d -dBm, %d %]\n", WiFi.BSSIDstr(i).c_str(), _ssid, WiFi.RSSI(i), getRSSIasQuality(WiFi.RSSI(i)));
           #endif
           if(quality < getRSSIasQuality(WiFi.RSSI(i))){
             quality = getRSSIasQuality(WiFi.RSSI(i));
@@ -198,17 +211,15 @@ void MyController::connectWiFi(){
       if(index != -1){
         _bssid = WiFi.BSSID(index);
         #ifdef ENABLE_DEBUG
-          MC_SERIAL.printf("MC: Selected bssid:[%s]\n", WiFi.BSSIDstr(index).c_str());
+          MC_SERIAL.printf("MC[D]: Selected bssid:[%s]\n", WiFi.BSSIDstr(index).c_str());
         #endif
       }
     }
 
-    
     #ifdef ENABLE_INFO
-      MC_SERIAL.printf("MC: Connecting to WiFi with ");
+      MC_SERIAL.printf("MC[I]: Connecting to WiFi with ");
       MC_SERIAL.printf("ssid[%s]", _ssid);
     #endif
-    
     if(strlen(_pwd) != 0){
       #ifdef ENABLE_INFO
         MC_SERIAL.printf(" and with password...");
@@ -216,14 +227,14 @@ void MyController::connectWiFi(){
       WiFi.begin(_ssid, _pwd, 0, _bssid);
     }else{
       #ifdef ENABLE_INFO
-        MC_SERIAL.printf("and no password...");
+        MC_SERIAL.printf("and no password.");
       #endif
       WiFi.begin(_ssid, NULL, 0, _bssid);
     }    
     //wait 5~10 seconds
     long refranceMillis = millis();
     while (WiFi.status() != WL_CONNECTED){
-      delay(500);
+      mcDelay(500);
       #ifdef ENABLE_INFO
         MC_SERIAL.printf(".");
       #endif
@@ -233,67 +244,132 @@ void MyController::connectWiFi(){
     }
     #ifdef ENABLE_INFO
       MC_SERIAL.printf("%s\n", WiFi.isConnected() ? "OK" : "FAILED");
-      MC_SERIAL.printf("MC: WiFi BSSID:[%s], RSSI:[%d dBm, %d %], IP:[%s]\n", WiFi.BSSIDstr().c_str(), WiFi.RSSI(), getRSSIasQuality(WiFi.RSSI()), WiFi.localIP().toString().c_str());
+      MC_SERIAL.printf("MC[I]: WiFi BSSID:[%s], RSSI:[%d dBm, %d %], IP:[%s], StatusCode:[%d]\n", WiFi.BSSIDstr().c_str(), WiFi.RSSI(), getRSSIasQuality(WiFi.RSSI()), WiFi.localIP().toString().c_str(), WiFi.status());
     #endif
+
+    if(!WiFi.isConnected()){
+      return;
+    }
+    //If MQTT init done, no need to follow MQTT setup
+    if(_mqttClientInit){
+      return;
+    }
+    //Load MQTT server details from EEPROM or from mDNS
+    if(mDNSstatus == 0x01){
+      #ifdef ENABLE_DEBUG
+        MC_SERIAL.printf("MC[D]: mDNS query service enabled with hostname as [%s]\n", getNodeEui());
+      #endif
+      WiFi.hostname(getNodeEui());
+      if (!MDNS.begin(getNodeEui())) {
+        #ifdef ENABLE_ERROR
+          MC_SERIAL.printf("MC[E]: Error setting up MDNS responder!\n");
+        #endif
+      }else{
+        #ifdef ENABLE_INFO
+          MC_SERIAL.printf("MC[I]: Sending mDNS query[_mc_mqtt._tcp]...\n");
+        #endif
+        int noServices = 0;
+        for(uint8_t count = 0; count < 5; count++){
+          #ifdef ENABLE_DEBUG
+            MC_SERIAL.printf("MC[D]: Executing mDNS query service. Attempt %d of 5.\n", count+1);
+          #endif
+          noServices = MDNS.queryService("mc_mqtt", "tcp"); // Send out query for MQTT tcp services
+          if(noServices > 0){
+            break;
+          }
+          mcDelay(1000);
+        }
+        #ifdef ENABLE_INFO
+          MC_SERIAL.printf("MC[I]: Number of services found: %d\n", noServices);
+        #endif
+        if (noServices == 0) {
+          #ifdef ENABLE_ERROR
+            MC_SERIAL.printf("MC[E]: There is no MQTT services found!\n");
+          #endif
+          reboot();
+        }
+        #ifdef ENABLE_TRACE
+          for (int index = 0; index <noServices ; ++index) {
+            // Print details for each service found
+            MC_SERIAL.printf("MC[T]: %d: mDNS response(Hostname:[%s], IP:[%s], Port:[%d])\n", index + 1, MDNS.hostname(index).c_str(), MDNS.IP(index).toString().c_str(), MDNS.port(index));
+          }
+        #endif
+        //Taking first mDNS service
+        MDNS.IP(0).toString().toCharArray(_mqttServer, 51);
+        _mqttPort = MDNS.port(0);
+      }
+    }else{
+      _mqttPort = hwReadConfigInteger(EEPROM_INTERNAL_ADDR_MQTT_PORT);
+      hwReadConfigBlock((void *)_mqttServer, (void *)EEPROM_INTERNAL_ADDR_MQTT_SERVER, 51);
+    }
+    hwReadConfigBlock((void *)_mqttUser, (void *)EEPROM_INTERNAL_ADDR_MQTT_USERNAME, 16);
+    hwReadConfigBlock((void *)_mqttPwd, (void *)EEPROM_INTERNAL_ADDR_MQTT_PASSWORD, 16);
+     //update MQTT client details
+    mqttClient.setServer(_mqttServer, _mqttPort);
+    mqttClient.setCallback(mqttMsgReceived);
+    #ifdef ENABLE_INFO
+      MC_SERIAL.printf("MC[I]: Configuration(NodeEUI:[%s], Mqtt{mDNS-status:[%d], Server:[%s], Port:[%d], FeedId:[%s], User:[%s]})\n", nodeEui, mDNSstatus, _mqttServer, _mqttPort, feedId, _mqttUser);
+    #endif
+    _mqttClientInit = true;
 }
 
-//Reconnect
-void MyController::reconnect() {
+//checkMQTT
+void MyController::checkMQTT() {
   bool skip = false;
-  // Loop until we're reconnected
+  // Loop until we're connected
   if (!WiFi.isConnected()) {
     #ifdef ENABLE_INFO
-      MC_SERIAL.printf("MC: WIFI not connected, trying connection...\n");
+      MC_SERIAL.printf("MC[I]: WIFI not connected, trying connection...\n");
     #endif
     connectWiFi();
   }
   #ifdef ENABLE_DEBUG
-    MC_SERIAL.printf("MC: WiFi connection status: %s\n", WiFi.isConnected()? "Connected" : "Not connected");
+    MC_SERIAL.printf("MC[D]: WiFi connection status: %s\n", WiFi.isConnected()? "Connected" : "Not connected");
   #endif
   //If WiFi is in connected state check MQTT
   if(WiFi.isConnected() && !mqttClient.connected()){
     #ifdef ENABLE_DEBUG
-      MC_SERIAL.printf("MC: Attempting MQTT connection...\n");
+      MC_SERIAL.printf("MC[D]: Attempting MQTT connection...\n");
     #endif
     #ifdef ENABLE_INFO
-      MC_SERIAL.printf("MC: MQTT settings(Broker:[%s], Port:[%d])\n", _mqttServer, _mqttPort);
+      MC_SERIAL.printf("MC[I]: MQTT settings(Broker:[%s], Port:[%d])\n", _mqttServer, _mqttPort);
     #endif
     // Attempt to connect
     if(strlen(_mqttUser) == 0){
       #ifdef ENABLE_INFO
-        MC_SERIAL.printf("MC: MQTT authenticating as anonymous\n");
+        MC_SERIAL.printf("MC[I]: MQTT authenticating as anonymous\n");
       #endif
       mqttClient.connect(WiFi.hostname().c_str());
     }else{
       #ifdef ENABLE_INFO
-        MC_SERIAL.printf("MC: MQTT authenticating as user:[%s]\n", _mqttUser);
+        MC_SERIAL.printf("MC[I]: MQTT authenticating as user:[%s]\n", _mqttUser);
       #endif
       mqttClient.connect(WiFi.hostname().c_str(), _mqttUser, _mqttUser);
     }
     if (mqttClient.connected()) {
       #ifdef ENABLE_INFO
-        MC_SERIAL.printf("MC: MQTT connected :)\n");
+        MC_SERIAL.printf("MC[I]: MQTT connected :)\n");
       #endif
       // Once connected, resubscribe
       char _topic[30];
       snprintf_P(_topic, 30, PSTR("in_%s/%s/#"), feedId, getNodeEui());
       mqttClient.subscribe(_topic);
       #ifdef ENABLE_INFO
-        MC_SERIAL.printf("MC: MQTT topic subscribed:[%s]\n", _topic);
+        MC_SERIAL.printf("MC[I]: MQTT topic subscribed:[%s]\n", _topic);
       #endif
       skip = true;
     } else {
       #ifdef ENABLE_INFO
-        MC_SERIAL.printf("MC: MQTT connection failed, rc=%d\n", mqttClient.state());
+        MC_SERIAL.printf("MC[I]: MQTT connection failed, rc=%d\n", mqttClient.state());
       #endif
     }
   }
   if(!skip){
     #ifdef ENABLE_DEBUG
-      MC_SERIAL.printf("MC: Try again in 3 seconds\n");
+      MC_SERIAL.printf("MC[D]: Try again in 3 seconds\n");
     #endif
     // Wait 3 seconds before retrying
-    delay(3000);
+    mcDelay(3000);
   }
   delay(10);
 }
@@ -302,7 +378,7 @@ void MyController::reconnect() {
 void mqttMsgReceived(char* topic, byte* payload, unsigned int length) {
   McMessage _msg;
   #ifdef ENABLE_DEBUG
-    MC_SERIAL.printf("MC: Message arrived on topic[%s]\n", topic);
+    MC_SERIAL.printf("MC[D]: Message arrived on topic[%s]\n", topic);
   #endif
   protocolParse(_msg, topic, payload, length);
   #ifdef ENABLE_TRACE
@@ -352,7 +428,7 @@ void mqttMsgReceived(char* topic, byte* payload, unsigned int length) {
         //Check fwUpdateRunning?
         if(_fwUpdateRunning){
           #ifdef ENABLE_INFO
-            MC_SERIAL.printf("MC: FW Upgrade already running...\n");
+            MC_SERIAL.printf("MC[I]: FW Upgrade already running...\n");
           #endif
           sendLogMessage("FW Upgrade already running...");
           return;
@@ -365,8 +441,8 @@ void mqttMsgReceived(char* topic, byte* payload, unsigned int length) {
         FirmwareConfig *_fc_int = (FirmwareConfig *) malloc(sizeof(FirmwareConfig));
         hwReadConfigBlock((void *)_fc_int, (void *)EEPROM_INTERNAL_ADDR_FW_CONFIG, sizeof(FirmwareConfig));
         #ifdef ENABLE_INFO
-          MC_SERIAL.printf("MC: FW Config Internal(Type:%d, Version:%d, Blocks:%d, md5sum:[%s])\n", _fc_int->type, _fc_int->version, _fc_int->blocks, _fc_int->md5sum);
-          MC_SERIAL.printf("MC: FW Config Response(Type:%d, Version:%d, Blocks:%d, md5sum:[%s])\n", _fc->type, _fc->version, _fc->blocks, _fc->md5sum);
+          MC_SERIAL.printf("MC[I]: FW Config Internal(Type:%d, Version:%d, Blocks:%d, md5sum:[%s])\n", _fc_int->type, _fc_int->version, _fc_int->blocks, _fc_int->md5sum);
+          MC_SERIAL.printf("MC[I]: FW Config Response(Type:%d, Version:%d, Blocks:%d, md5sum:[%s])\n", _fc->type, _fc->version, _fc->blocks, _fc->md5sum);
         #endif
         bool fwUpdateState = _fc_int->type == _fc->type 
           && _fc_int->version == _fc->version 
@@ -374,13 +450,13 @@ void mqttMsgReceived(char* topic, byte* payload, unsigned int length) {
           && strcmp(_fc_int->md5sum, _fc->md5sum) == 0;
 
         free(_fc_int);
-        #ifdef ENABLE_DEBUG
-          MC_SERIAL.printf("MC: FreeHeap:%d\n", ESP.getFreeHeap());
+        #ifdef ENABLE_TRACE
+          MC_SERIAL.printf("MC[T]: FreeHeap:%d\n", ESP.getFreeHeap());
         #endif
         if(fwUpdateState){
           sendLogMessage("Firmware up to date!");
           #ifdef ENABLE_INFO
-            MC_SERIAL.printf("MC: Firmware up to date. nothing to do!\n");
+            MC_SERIAL.printf("MC[I]: Firmware up to date. nothing to do!\n");
           #endif
           return;
         }
@@ -392,7 +468,7 @@ void mqttMsgReceived(char* topic, byte* payload, unsigned int length) {
           snprintf_P(_logMessage, MAX_PAYLOAD, "FW update: There is no enough space available! expected:%d, available:%d", requiredSpace, maxSketchSpace);
           sendLogMessage(_logMessage);
           #ifdef ENABLE_INFO
-            MC_SERIAL.printf("MC: %s\n", _logMessage);
+            MC_SERIAL.printf("MC[I]: %s\n", _logMessage);
           #endif
           return;
         }else if(maxSketchSpace < (requiredSpace + MAX_OTA_PAYLOAD)){
@@ -400,7 +476,7 @@ void mqttMsgReceived(char* topic, byte* payload, unsigned int length) {
           snprintf_P(_logMessage, MAX_PAYLOAD, "FW update is running on edge! expected:~%d, available:%d\n", (requiredSpace + MAX_OTA_PAYLOAD), maxSketchSpace);
           sendLogMessage(_logMessage);
           #ifdef ENABLE_INFO
-            MC_SERIAL.printf("MC: %s\n", _logMessage);
+            MC_SERIAL.printf("MC[I]: %s\n", _logMessage);
           #endif
           //Will continue
         }
@@ -408,7 +484,7 @@ void mqttMsgReceived(char* topic, byte* payload, unsigned int length) {
           Update.printError(Serial);
         }else if(!Update.setMD5(_fc->md5sum)){
             #ifdef ENABLE_INFO
-              MC_SERIAL.printf("MC: Failed to set md5\n");
+              MC_SERIAL.printf("MC[I]: Failed to set md5\n");
             #endif
             return;
         }
@@ -419,7 +495,7 @@ void mqttMsgReceived(char* topic, byte* payload, unsigned int length) {
         _msg.set(&fwRequest, sizeof(RequestFWBlock));
         send(_msg);
         #ifdef ENABLE_INFO
-          MC_SERIAL.printf("MC: Firmware upgrade started...\n");
+          MC_SERIAL.printf("MC[I]: Firmware upgrade started...\n");
         #endif
         _fwUpdateMillis = millis();
         _fwUpdateRunning = true;
@@ -427,13 +503,13 @@ void mqttMsgReceived(char* topic, byte* payload, unsigned int length) {
         _fwUpdateMillis = millis();
         ReplyFWBlock *replyFwBlock = (ReplyFWBlock *)_msg.data;
         #ifdef ENABLE_DEBUG
-          MC_SERIAL.printf("MC: FW Response(Type:%d, Version:%d, Block:%d of %d, DataLength:%d), FreeHeap:%d\n",
+          MC_SERIAL.printf("MC[D]: FW Response(Type:%d, Version:%d, Block:%d of %d, DataLength:%d), FreeHeap:%d\n",
             replyFwBlock->type, replyFwBlock->version, replyFwBlock->block, _fc->blocks, replyFwBlock->size, ESP.getFreeHeap());
         #endif
         size_t result = Update.write(replyFwBlock->data, replyFwBlock->size);
         if(result != replyFwBlock->size){
           #ifdef ENABLE_INFO
-            MC_SERIAL.printf("MC: Update failed...Write result:%d\n", result);
+            MC_SERIAL.printf("MC[I]: Update failed...Write result:%d\n", result);
             Update.printError(MC_SERIAL);
           #endif
         }else if(replyFwBlock->block >= (_fc->blocks-1)){
@@ -441,7 +517,7 @@ void mqttMsgReceived(char* topic, byte* payload, unsigned int length) {
             //Update firmware config to EEPROM
             hwWriteConfigBlock((void *)_fc, (void *)EEPROM_INTERNAL_ADDR_FW_CONFIG, sizeof(FirmwareConfig));
             #ifdef ENABLE_INFO
-              MC_SERIAL.printf("MC: Firmware update success...\n");
+              MC_SERIAL.printf("MC[I]: Firmware update success...\n");
             #endif
             sendLogMessage("Firmware upgrade success...");
             reboot();
@@ -519,7 +595,7 @@ bool isWifiConnected(){
 void factoryReset(){
   sendLogMessage("Factory reset triggered...");
   #ifdef ENABLE_INFO
-    MC_SERIAL.printf("MC: Factory reset triggered...\n");
+    MC_SERIAL.printf("MC[I]: Factory reset triggered...\n");
   #endif
   hwWriteConfig(EEPROM_INTERNAL_SYSTEM_RESET, 0x00);
   reboot();
@@ -528,7 +604,7 @@ void factoryReset(){
 void reboot(){
   sendLogMessage("Rebooting...");
   #ifdef ENABLE_INFO
-    MC_SERIAL.printf("MC: Rebooting...\n");
+    MC_SERIAL.printf("MC[I]: Rebooting...\n");
   #endif
   ESP.restart();
 }
@@ -551,8 +627,8 @@ void updateFeedId(bool isWrite){
 
 
 void handleRoot(){
-  #ifdef ENABLE_DEBUG
-    MC_SERIAL.printf("MC: on root page\n");
+  #ifdef ENABLE_TRACE
+    MC_SERIAL.printf("MC[T]: on root page\n");
   #endif
   String page = FPSTR(HTTP_HEAD);
   page.replace("{v}", "Options");
@@ -570,8 +646,8 @@ void handleRoot(){
 }
 
 void handleConfig(){
-  #ifdef ENABLE_DEBUG
-    MC_SERIAL.printf("MC: on configuration page\n");
+  #ifdef ENABLE_TRACE
+    MC_SERIAL.printf("MC[T]: on configuration page\n");
   #endif
   String page = FPSTR(HTTP_HEAD);
   page.replace("{v}", "Config ESP");
@@ -582,7 +658,7 @@ void handleConfig(){
   int n = WiFi.scanNetworks();
   if (n == 0) {
     #ifdef ENABLE_INFO
-      MC_SERIAL.printf("MC: No networks found\n");
+      MC_SERIAL.printf("MC[I]: No networks found\n");
     #endif
     page += F("No networks found. Refresh to scan again.");
   }else {
@@ -617,19 +693,31 @@ void handleConfig(){
 }
 
 void handleSubmit(){
-  #ifdef ENABLE_DEBUG
-    MC_SERIAL.printf("MC: on configuration save page\n");
+  #ifdef ENABLE_TRACE
+    MC_SERIAL.printf("MC[T]: on configuration save page\n");
   #endif
   bool status = true;
   //Save ssid
   String _ssid    = _webServer.arg("s").c_str();
   String _pwd     = _webServer.arg("p").c_str();  
   String _bssid   = _webServer.arg("bs").c_str();
+
+  String _adc     = _webServer.arg("adc").c_str();
   String _bkr     = _webServer.arg("bkr").c_str();
   String _port    = _webServer.arg("port").c_str();
   String _feed    = _webServer.arg("feed").c_str();
   String _user    = _webServer.arg("user").c_str();
   String _bkrPwd  = _webServer.arg("bkrPwd").c_str();
+
+  uint8_t _mdns_status = 0x00;
+  if(_adc.length() != 0 && _adc == "on"){
+    _mdns_status = 0x01;
+  }
+  
+  #ifdef ENABLE_DEBUG
+    MC_SERIAL.printf("MC[D]: User input raw {ssid:[%s], bssid:[%s], mDNS-status:[%s, %d], mqtt-broker:[%s], port:[%s], feed:[%s], user:[%s]}\n",
+      _ssid.c_str(), _bssid.c_str(), _adc.c_str(), _mdns_status, _bkr.c_str(), _port.c_str(), _feed.c_str(), _user.c_str());
+  #endif
   
   uint8_t _bssid_set = 0x00;
   uint8_t _bssid_eeprom[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -640,23 +728,24 @@ void handleSubmit(){
 
   if(_ssid.length() == 0){
     status = false;
-  }else if(_bkr.length() == 0){
+  }else if(_bkr.length() == 0 && _mdns_status == 0x01){
     status = false;
   }else if(_feed.length() == 0){
-    status = false;
+    _feed = "esp";  //If feed lenght is ZERO, take "esp" as default feed
   }else if(_port.length() == 0){
-    status = false;
+    _port = "1883"; //If port lenght is ZERO, take "1883" as default port
   }
-  #ifdef ENABLE_INFO
-    MC_SERIAL.printf("User input WiFi(ssid:%s), MQTT(Server:%s, Port:%s, Feed:%s, Username:%s)\n", _ssid.c_str(), _bkr.c_str(), _port.c_str(), _feed.c_str(), _user.c_str());
-  #endif
+
   if(status){   
     //Save things in eeprom 
     
-    strcpy(feedId, _feed.c_str());
     //Update feedId
+    strcpy(feedId, _feed.c_str());
     updateFeedId(true);
-    
+
+    //Update auto dicover control to Enabled or Disabled (mDNS)
+    hwWriteConfig(EEPROM_INTERNAL_ADDR_MQTT_MDNS, _mdns_status);
+
     //Update server/broker
     hwWriteConfigBlock((void *)_bkr.c_str(), (void *)EEPROM_INTERNAL_ADDR_MQTT_SERVER, 51);
     //Update port
@@ -686,22 +775,22 @@ void handleSubmit(){
     page += FPSTR(HTTP_END);
     _webServer.send(200, "text/html", page);
     #ifdef ENABLE_DEBUG
-      MC_SERIAL.printf("MC: Configuration saved...\n");
+      MC_SERIAL.printf("MC[D]: Configuration saved...\n");
     #endif
     //do device reboot
     reboot();
   }else{
-    #ifdef ENABLE_DEBUG
-      MC_SERIAL.printf("MC: Failed to save configuration...\n");
+    #ifdef ENABLE_ERROR
+      MC_SERIAL.printf("MC[E]: Failed to save configuration...\n");
     #endif
-    _webServer.send(200, "text/html", "Failed! do retry..");
+    _webServer.send(200, "text/html", "Failed! check values and do try..");
   }
   
 }
 
 void handleInfo() {
-  #ifdef ENABLE_DEBUG
-    MC_SERIAL.printf("MC: on information page\n");
+  #ifdef ENABLE_TRACE
+    MC_SERIAL.printf("MC[T]: on information page\n");
   #endif
   String page = FPSTR(HTTP_HEAD);
   page.replace("{v}", "Info");
@@ -745,7 +834,7 @@ void configSetupManager(){
     WiFi.softAP(WiFi.hostname().c_str());
   #endif
   #ifdef ENABLE_INFO
-      MC_SERIAL.printf("MC: Setting up AP to get configuration details\n");
+      MC_SERIAL.printf("MC[I]: Setting up AP to get configuration details\n");
   #endif
   /*
   while (WiFi.status() != WL_CONNECTED) {
@@ -756,7 +845,7 @@ void configSetupManager(){
   }
   * */
   #ifdef ENABLE_INFO
-      MC_SERIAL.printf("MC: Access point(AP), SSID:[%s] IP:[%s]\n", WiFi.hostname().c_str(), WiFi.softAPIP().toString().c_str());
+      MC_SERIAL.printf("MC[I]: Access point(AP), SSID:[%s] IP:[%s]\n", WiFi.hostname().c_str(), WiFi.softAPIP().toString().c_str());
   #endif
   _webServer.on("/", handleRoot);
   _webServer.on("/sconfig", handleSubmit);
@@ -775,7 +864,7 @@ bool send(McMessage &message){
     char *payload = "";
     payload = message.getString(payload);   
     #ifdef ENABLE_DEBUG
-      MC_SERIAL.printf("MC: About to publish a topic:[%s], Payload:[%s]\n", _topic, payload);
+      MC_SERIAL.printf("MC[D]: About to publish a topic:[%s], Payload:[%s]\n", _topic, payload);
     #endif
     bool status = mqttClient.publish(_topic, payload);
     if((millis() - _lastMqttLoopRun) > 700){
@@ -785,7 +874,7 @@ bool send(McMessage &message){
     return status;
   }else{
     #ifdef ENABLE_INFO
-      MC_SERIAL.printf("MC: MQTT client not connected, Failed to send message\n");
+      MC_SERIAL.printf("MC[I]: MQTT client not connected, Failed to send message\n");
     #endif
     return false;
   }
@@ -850,7 +939,7 @@ bool protocolParse(McMessage &message, char* topic, byte* payload, unsigned int 
   // mygateway1-in/9985114/wl/C_SET/V_TEXT/ACK_NO
   for (str = strtok_r(topic, "/", &p); str && i < 6; str = strtok_r(NULL, "/", &p)) {
   #ifdef ENABLE_TRACE
-    MC_SERIAL.printf("MC: i:%d, str:%s\n", i, str);
+    MC_SERIAL.printf("MC[T]: i:%d, str:%s\n", i, str);
   #endif
     char topicSubscribe[10];
     snprintf_P(topicSubscribe, 10, "in_%s", feedId);

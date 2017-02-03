@@ -312,5 +312,5 @@ bool McMessage::isAckResponse(){
 
 void McMessage::printOnSerial() {
   char *_tmpPayload = "";
-  MC_SERIAL.printf("MC: McMessage(SensorId:%s, Type:%s, SubType:%s, Payload:{%s})\n", sensorId, type, subType, getString(_tmpPayload));
+  MC_SERIAL.printf("MC[T]: McMessage(SensorId:%s, Type:%s, SubType:%s, Payload:{%s})\n", sensorId, type, subType, getString(_tmpPayload));
 }

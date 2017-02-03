@@ -5,16 +5,18 @@
 /* User configurable variables */
 /* ***************************************************************************** */
 // Enable DEBUG in sketch to show debug prints.
+#define ENABLE_ERROR
 #define ENABLE_INFO
-//#define ENABLE_DEBUG
-//#define ENABLE_TRACE
+#define ENABLE_DEBUG
+#define ENABLE_TRACE
 
+
+// Disable serial port completely
+//#define MC_DISABLED_SERIAL
 
 //Default serial port and baud rate
 #define MC_SERIAL Serial
 #define SERIAL_BAUD_RATE 115200
-// Disable serial port completely
-//#define MC_DISABLED_SERIAL
 
 // Enable vcc pin
 #define ENABLE_READ_VCC
@@ -27,7 +29,7 @@
 // Define factory reset pin.
 // You can configure any pin for factory reset. When you cannot access your device,
 // You reset your device settings and ask to produce AP to update new settings
-//#define FACTORY_RESET_PIN 0
+#define FACTORY_RESET_PIN 0
 #define FACTORY_RESET_PIN_STATE 0
 #define FACTORY_RESET_TIME 1000*9  //hold the button 9 seconds
 
@@ -51,6 +53,7 @@
 
 // Turn off debug if serial pins is used for other stuff
 #ifdef MC_DISABLED_SERIAL
+#undef ENABLE_ERROR
 #undef ENABLE_INFO
 #undef ENABLE_DEBUG
 #undef ENABLE_TRACE
@@ -86,5 +89,6 @@
 #define EEPROM_INTERNAL_ADDR_WIFI_PASSWORD (EEPROM_INTERNAL_ADDR_WIFI_SSID + 33) //password 64 chars
 #define EEPROM_INTERNAL_ADDR_WIFI_ENABLE_BSSID (EEPROM_INTERNAL_ADDR_WIFI_PASSWORD + 65) //1 byte
 #define EEPROM_INTERNAL_ADDR_WIFI_BSSID (EEPROM_INTERNAL_ADDR_WIFI_ENABLE_BSSID + 1) //bssid length 6 bytes
+#define EEPROM_INTERNAL_ADDR_MQTT_MDNS (EEPROM_INTERNAL_ADDR_WIFI_BSSID + 6) //mdns settings, 1 byte
 
 #endif

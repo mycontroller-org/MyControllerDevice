@@ -6,6 +6,7 @@
 #include <PubSubClient.h>         //https://github.com/knolleary/pubsubclient
 
 #include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
+#include <ESP8266mDNS.h>          //https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266mDNS
 #include <Wire.h>
 
 #include <ESP8266WebServer.h>
@@ -28,6 +29,7 @@ bool send(McMessage &message);
 char* getNodeEui();
 void sendRSSI();
 void reboot();
+void mcDelay(long ms);
 void requestTime();
 void sendBatteryLevel(float level);
 void sendStatistics();
@@ -70,12 +72,12 @@ uint8_t loadState(uint16_t pos);
 
 
 const char HTTP_HEAD[] PROGMEM            = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=no\"/><title>MyController.org - {v}</title>";
-const char HTTP_STYLE[] PROGMEM           = "<style>.c{text-align: center;} div,input{padding:5px;font-size:1em;} input{width:95%;} body{text-align: center;font-family:verdana;} button{border:0;border-radius:0.3rem;background-color:#1fa3ec;color:#fff;line-height:2.4rem;font-size:1.2rem;width:100%;} .q{float: right;width: 64px;text-align: right;} .l{background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAALVBMVEX///8EBwfBwsLw8PAzNjaCg4NTVVUjJiZDRUUUFxdiZGSho6OSk5Pg4eFydHTCjaf3AAAAZElEQVQ4je2NSw7AIAhEBamKn97/uMXEGBvozkWb9C2Zx4xzWykBhFAeYp9gkLyZE0zIMno9n4g19hmdY39scwqVkOXaxph0ZCXQcqxSpgQpONa59wkRDOL93eAXvimwlbPbwwVAegLS1HGfZAAAAABJRU5ErkJggg==\") no-repeat left center;background-size: 1em;}</style>";
+const char HTTP_STYLE[] PROGMEM           = "<style>.c{text-align: center;} div,input{padding:5px;font-size:1em;} input{width:95%;} body{text-align: center;font-family:verdana;} button{border:0;border-radius:0.3rem;background-color:#1fa3ec;color:#fff;line-height:2.4rem;font-size:1.2rem;width:100%;} .q{float: right;width: 64px;text-align: right;} .l{background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAALVBMVEX///8EBwfBwsLw8PAzNjaCg4NTVVUjJiZDRUUUFxdiZGSho6OSk5Pg4eFydHTCjaf3AAAAZElEQVQ4je2NSw7AIAhEBamKn97/uMXEGBvozkWb9C2Zx4xzWykBhFAeYp9gkLyZE0zIMno9n4g19hmdY39scwqVkOXaxph0ZCXQcqxSpgQpONa59wkRDOL93eAXvimwlbPbwwVAegLS1HGfZAAAAABJRU5ErkJggg==\") no-repeat left center;background-size: 1em;} #adc[type=checkbox]:checked + #ad {display: none;}</style>";
 const char HTTP_SCRIPT[] PROGMEM          = "<script>function c(l){document.getElementById('s').value=l.innerText||l.textContent;document.getElementById('p').focus();}</script>";
 const char HTTP_HEAD_END[] PROGMEM        = "</head><body><div style='text-align:left;display:inline-block;min-width:260px;'>";
 const char HTTP_PORTAL_OPTIONS[] PROGMEM  = "<form action=\"/config\" method=\"get\"><button>Configure Device</button></form><br/><form action=\"/info\" method=\"get\"><button>Info</button></form>";
 const char HTTP_ITEM[] PROGMEM            = "<div><a href='#p' onclick='c(this)'>{v}</a>&nbsp;<span>[{b}]</span>&nbsp;<span class='q {i}'>{r}%</span></div>";
-const char HTTP_FORM_START[] PROGMEM      = "<form method='get' action='sconfig'><input id='s' name='s' length=32 placeholder='SSID'><br/><input id='p' name='p' length=64 type='password' placeholder='WiFi password'><br/><input id='bs' name='bs' length=20 placeholder='BSSID'><br/><br/><input id='bkr' name='bkr' length=50 type='text' value='{svr}' placeholder='Server'><br/><input id='port' name='port' length=5 type='text'  value='{port}' placeholder='Port'><br/><input id='feed' name='feed' length=5 type='text' placeholder='Feed id'><br/><input id='user' name='user' length=15 type='text' placeholder='Username'><br/><input id='bkrPwd' name='bkrPwd' length=15 type='password' placeholder='Password'>";
+const char HTTP_FORM_START[] PROGMEM      = "<form method='get' action='sconfig'><input id='s' name='s' length=32 placeholder='SSID'><br/><input id='p' name='p' length=64 type='password' placeholder='WiFi password'><br/><input id='bs' name='bs' length=20 placeholder='BSSID'><br/><br/><label>Enable MyController auto discover</label><input id='adc' name='adc' type=\"checkbox\"/><span id='ad'><input id='bkr' name='bkr' length=50 type='text' value='{svr}' placeholder='Server'><br/><input id='port' name='port' length=5 type='text'  value='{port}' placeholder='Port'><br/></span><input id='feed' name='feed' length=5 type='text' placeholder='Feed id'><br/><input id='user' name='user' length=15 type='text' placeholder='Username'><br/><input id='bkrPwd' name='bkrPwd' length=15 type='password' placeholder='Password'>";
 const char HTTP_FORM_END[] PROGMEM        = "<br/><br/><button type='submit'>Save</button></form>";
 const char HTTP_SAVED[] PROGMEM           = "<div>Configurations Saved<br />Device will reboot and start in normal mode.<br />See you on MyController.org :)</div>";
 const char HTTP_END[] PROGMEM             = "</div></body></html>";
@@ -91,6 +93,7 @@ extern uint32_t heartbeat;
 extern uint32_t pong;
 extern char PAYLOAD_NULL[1];
 extern char nodeEui[13];
+extern uint8_t mDNSstatus;
 extern char feedId[6];
 extern ESP8266WebServer _webServer;
 extern char _mqttServer[51];
@@ -110,7 +113,7 @@ public:
   
   bool initialize();
   void loop();
-  void reconnect();
+  void checkMQTT();
   
   bool init_done = false;
 
