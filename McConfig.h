@@ -7,8 +7,8 @@
 // Enable DEBUG in sketch to show debug prints.
 #define ENABLE_ERROR
 #define ENABLE_INFO
-#define ENABLE_DEBUG
-#define ENABLE_TRACE
+//#define ENABLE_DEBUG
+//#define ENABLE_TRACE
 
 
 // Disable serial port completely

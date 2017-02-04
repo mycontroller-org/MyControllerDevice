@@ -57,7 +57,7 @@ void MyController::loop() {
   #ifdef ENABLE_INFO
     MC_SERIAL.printf("MC[I]: MQTT failed! Retryting to connect...\n");
   #endif
-    checkMQTT();
+    checkMqtt();
   }else{
     mqttClient.loop();
     _lastMqttLoopRun = millis();
@@ -91,7 +91,7 @@ bool MyController::initialize() {
   updateConfigFromEEPROM();
   init_done = true;
   WiFi.mode(WIFI_STA);
-  checkMQTT();
+  checkMqtt();
   if(mqttClient.connected()){
     before();
     sendRSSI();
@@ -246,58 +246,61 @@ void MyController::connectWiFi(){
       MC_SERIAL.printf("%s\n", WiFi.isConnected() ? "OK" : "FAILED");
       MC_SERIAL.printf("MC[I]: WiFi BSSID:[%s], RSSI:[%d dBm, %d %], IP:[%s], StatusCode:[%d]\n", WiFi.BSSIDstr().c_str(), WiFi.RSSI(), getRSSIasQuality(WiFi.RSSI()), WiFi.localIP().toString().c_str(), WiFi.status());
     #endif
+}
 
-    if(!WiFi.isConnected()){
-      return;
-    }
+//Load mqtt configurations
+void MyController::loadMqttConfig() {
     //If MQTT init done, no need to follow MQTT setup
-    if(_mqttClientInit){
+    if(_mqttClientInit && mDNSstatus == MDNS_DISABLED){
       return;
     }
     //Load MQTT server details from EEPROM or from mDNS
-    if(mDNSstatus == 0x01){
+    if(mDNSstatus == MDNS_ENABLED){
       #ifdef ENABLE_DEBUG
         MC_SERIAL.printf("MC[D]: mDNS query service enabled with hostname as [%s]\n", getNodeEui());
       #endif
-      WiFi.hostname(getNodeEui());
-      if (!MDNS.begin(getNodeEui())) {
-        #ifdef ENABLE_ERROR
-          MC_SERIAL.printf("MC[E]: Error setting up MDNS responder!\n");
-        #endif
-      }else{
-        #ifdef ENABLE_INFO
-          MC_SERIAL.printf("MC[I]: Sending mDNS query[_mc_mqtt._tcp]...\n");
-        #endif
-        int noServices = 0;
-        for(uint8_t count = 0; count < 5; count++){
-          #ifdef ENABLE_DEBUG
-            MC_SERIAL.printf("MC[D]: Executing mDNS query service. Attempt %d of 5.\n", count+1);
-          #endif
-          noServices = MDNS.queryService("mc_mqtt", "tcp"); // Send out query for MQTT tcp services
-          if(noServices > 0){
-            break;
-          }
-          mcDelay(1000);
-        }
-        #ifdef ENABLE_INFO
-          MC_SERIAL.printf("MC[I]: Number of services found: %d\n", noServices);
-        #endif
-        if (noServices == 0) {
+      if (!_mqttClientInit){
+        if(!MDNS.begin(getNodeEui())){
           #ifdef ENABLE_ERROR
-            MC_SERIAL.printf("MC[E]: There is no MQTT services found!\n");
+            MC_SERIAL.printf("MC[E]: Error setting up MDNS responder!\n");
+          #endif
+          #ifdef ENABLE_INFO
+            MC_SERIAL.printf("MC[I]: Reboot initiated from MQTT configuration request.\n");
           #endif
           reboot();
         }
-        #ifdef ENABLE_TRACE
-          for (int index = 0; index <noServices ; ++index) {
-            // Print details for each service found
-            MC_SERIAL.printf("MC[T]: %d: mDNS response(Hostname:[%s], IP:[%s], Port:[%d])\n", index + 1, MDNS.hostname(index).c_str(), MDNS.IP(index).toString().c_str(), MDNS.port(index));
-          }
-        #endif
-        //Taking first mDNS service
-        MDNS.IP(0).toString().toCharArray(_mqttServer, 51);
-        _mqttPort = MDNS.port(0);
       }
+      #ifdef ENABLE_INFO
+        MC_SERIAL.printf("MC[I]: Sending mDNS query[_mc_mqtt._tcp]...\n");
+      #endif
+      int noServices = 0;
+      for(uint8_t count = 0; count < 5; count++){
+        #ifdef ENABLE_DEBUG
+          MC_SERIAL.printf("MC[D]: Executing mDNS query service. Attempt %d of 5.\n", count+1);
+        #endif
+        noServices = MDNS.queryService("mc_mqtt", "tcp"); // Send out query for MQTT tcp services
+        if(noServices > 0){
+          break;
+        }
+        mcDelay(1000);
+      }
+      #ifdef ENABLE_INFO
+        MC_SERIAL.printf("MC[I]: Number of services found: %d\n", noServices);
+      #endif
+      if (noServices == 0) {
+        #ifdef ENABLE_ERROR
+          MC_SERIAL.printf("MC[E]: There is no MQTT services found!\n");
+        #endif
+      }
+      #ifdef ENABLE_TRACE
+        // Print details for each service found
+        for (int index = 0; index <noServices ; ++index) {
+          MC_SERIAL.printf("MC[T]: %d: mDNS response(Hostname:[%s], IP:[%s], Port:[%d])\n", index + 1, MDNS.hostname(index).c_str(), MDNS.IP(index).toString().c_str(), MDNS.port(index));
+        }
+      #endif
+      //Taking first mDNS service
+      MDNS.IP(0).toString().toCharArray(_mqttServer, 51);
+      _mqttPort = MDNS.port(0);
     }else{
       _mqttPort = hwReadConfigInteger(EEPROM_INTERNAL_ADDR_MQTT_PORT);
       hwReadConfigBlock((void *)_mqttServer, (void *)EEPROM_INTERNAL_ADDR_MQTT_SERVER, 51);
@@ -313,8 +316,8 @@ void MyController::connectWiFi(){
     _mqttClientInit = true;
 }
 
-//checkMQTT
-void MyController::checkMQTT() {
+//checkMqtt status
+void MyController::checkMqtt() {
   bool skip = false;
   // Loop until we're connected
   if (!WiFi.isConnected()) {
@@ -328,6 +331,8 @@ void MyController::checkMQTT() {
   #endif
   //If WiFi is in connected state check MQTT
   if(WiFi.isConnected() && !mqttClient.connected()){
+    //Load Mqtt configurations
+    loadMqttConfig();
     #ifdef ENABLE_DEBUG
       MC_SERIAL.printf("MC[D]: Attempting MQTT connection...\n");
     #endif
@@ -709,9 +714,9 @@ void handleSubmit(){
   String _user    = _webServer.arg("user").c_str();
   String _bkrPwd  = _webServer.arg("bkrPwd").c_str();
 
-  uint8_t _mdns_status = 0x00;
+  uint8_t _mdns_status = MDNS_DISABLED;
   if(_adc.length() != 0 && _adc == "on"){
-    _mdns_status = 0x01;
+    _mdns_status = MDNS_ENABLED;
   }
   
   #ifdef ENABLE_DEBUG
@@ -728,7 +733,7 @@ void handleSubmit(){
 
   if(_ssid.length() == 0){
     status = false;
-  }else if(_bkr.length() == 0 && _mdns_status == 0x01){
+  }else if(_bkr.length() == 0 && _mdns_status == MDNS_ENABLED){
     status = false;
   }else if(_feed.length() == 0){
     _feed = "esp";  //If feed lenght is ZERO, take "esp" as default feed

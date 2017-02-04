@@ -310,7 +310,9 @@ bool McMessage::isAckResponse(){
   return ack == ACK_RESPONSE;
 }
 
+#ifdef ENABLE_TRACE
 void McMessage::printOnSerial() {
   char *_tmpPayload = "";
   MC_SERIAL.printf("MC[T]: McMessage(SensorId:%s, Type:%s, SubType:%s, Payload:{%s})\n", sensorId, type, subType, getString(_tmpPayload));
 }
+#endif

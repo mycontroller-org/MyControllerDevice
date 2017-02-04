@@ -15,6 +15,8 @@
 
 #include <EEPROM.h>
 
+#define MDNS_ENABLED    0x01
+#define MDNS_DISABLED   0x00
 
 bool protocolParse(McMessage &message, char* topic, byte* payload, unsigned int length);
 uint8_t protocolH2i(char c);
@@ -77,7 +79,7 @@ const char HTTP_SCRIPT[] PROGMEM          = "<script>function c(l){document.getE
 const char HTTP_HEAD_END[] PROGMEM        = "</head><body><div style='text-align:left;display:inline-block;min-width:260px;'>";
 const char HTTP_PORTAL_OPTIONS[] PROGMEM  = "<form action=\"/config\" method=\"get\"><button>Configure Device</button></form><br/><form action=\"/info\" method=\"get\"><button>Info</button></form>";
 const char HTTP_ITEM[] PROGMEM            = "<div><a href='#p' onclick='c(this)'>{v}</a>&nbsp;<span>[{b}]</span>&nbsp;<span class='q {i}'>{r}%</span></div>";
-const char HTTP_FORM_START[] PROGMEM      = "<form method='get' action='sconfig'><input id='s' name='s' length=32 placeholder='SSID'><br/><input id='p' name='p' length=64 type='password' placeholder='WiFi password'><br/><input id='bs' name='bs' length=20 placeholder='BSSID'><br/><br/><label>Enable MyController auto discover</label><input id='adc' name='adc' type=\"checkbox\"/><span id='ad'><input id='bkr' name='bkr' length=50 type='text' value='{svr}' placeholder='Server'><br/><input id='port' name='port' length=5 type='text'  value='{port}' placeholder='Port'><br/></span><input id='feed' name='feed' length=5 type='text' placeholder='Feed id'><br/><input id='user' name='user' length=15 type='text' placeholder='Username'><br/><input id='bkrPwd' name='bkrPwd' length=15 type='password' placeholder='Password'>";
+const char HTTP_FORM_START[] PROGMEM      = "<form method='get' action='sconfig'><input id='s' name='s' length=32 placeholder='SSID'><br/><input id='p' name='p' length=64 type='password' placeholder='WiFi password'><br/><input id='bs' name='bs' length=20 placeholder='BSSID'><br/><br/><label>Enable auto discover</label><input id='adc' name='adc' type=\"checkbox\" style='zoom:1.4;width:20px;'/><span id='ad'><input id='bkr' name='bkr' length=50 type='text' value='{svr}' placeholder='Server'><br/><input id='port' name='port' length=5 type='text'  value='{port}' placeholder='Port'><br/></span><input id='feed' name='feed' length=5 type='text' placeholder='Feed id'><br/><input id='user' name='user' length=15 type='text' placeholder='Username'><br/><input id='bkrPwd' name='bkrPwd' length=15 type='password' placeholder='Password'>";
 const char HTTP_FORM_END[] PROGMEM        = "<br/><br/><button type='submit'>Save</button></form>";
 const char HTTP_SAVED[] PROGMEM           = "<div>Configurations Saved<br />Device will reboot and start in normal mode.<br />See you on MyController.org :)</div>";
 const char HTTP_END[] PROGMEM             = "</div></body></html>";
@@ -107,13 +109,14 @@ extern long _fwUpdateMillis;
 class MyController {
 private:
   void connectWiFi();
+  void loadMqttConfig();
 public:
   // Constructors
   MyController();
   
   bool initialize();
   void loop();
-  void checkMQTT();
+  void checkMqtt();
   
   bool init_done = false;
 
