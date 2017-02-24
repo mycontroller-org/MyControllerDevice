@@ -52,7 +52,7 @@ SimpleTimer timer;
 void sendTemperature(){
   tempSensors.requestTemperatures(); // Send the command to get temperatures
   McMessage _message;
-  _message.update(SEN_TEMP, C_SET, V_TEMP);
+  _message.update(SEN_TEMP, C_SET, V_TEMPERATURE);
   send(_message.set(tempSensors.getTempCByIndex(0), 3));
 }
 
@@ -70,9 +70,9 @@ void before(){
 
 void presentation(){
   sendSketchInfo("Relay and Temperature sensor", "1.0.0");
-  present(S_TEMP, SEN_TEMP, "Temperature sensor");
+  present(S_TEMPERATURE, SEN_TEMP, "Temperature sensor");
   present(S_BINARY, SEN_SWITCH, "Switch");
-  request(SEN_TEMP, V_TEMP);
+  request(SEN_TEMP, V_TEMPERATURE);
   request(SEN_SWITCH, V_STATUS);
 }
 

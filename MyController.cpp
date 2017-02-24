@@ -426,7 +426,7 @@ void mqttMsgReceived(char* topic, byte* payload, unsigned int length) {
       receive(_msg); //Handover to callback
       return;
     }else if(_msg.isTypeOf(C_INTERNAL)){
-      if(_msg.isSubTypeOf(I_HEARTBEAT)){
+      if(_msg.isSubTypeOf(I_HEARTBEAT_REQUEST)){
         _msg.update(BC_SENSOR, C_INTERNAL, I_HEARTBEAT_RESPONSE);
         send(_msg.set(heartbeat++));
       }else if(_msg.isSubTypeOf(I_PING)){

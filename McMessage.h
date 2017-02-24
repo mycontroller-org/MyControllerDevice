@@ -30,121 +30,119 @@
 #include <stdint.h>
 
 //broadcast types
-#define BC_NODE                       "NODE_BC"
-#define BC_SENSOR                     "SENSOR_BC"
-                                      
-#define C_PRESENTATION                "C_PRESENTATION"
-#define C_SET                         "C_SET"
-#define C_REQ                         "C_REQ"
-#define C_INTERNAL                    "C_INTERNAL"
-#define C_STREAM                      "C_STREAM"
-                                      
-#define S_DOOR                        "S_DOOR"
-#define S_MOTION                      "S_MOTION"
-#define S_SMOKE                       "S_SMOKE"
-#define S_BINARY                      "S_BINARY"
-#define S_LIGHT                       "S_LIGHT"
-#define S_DIMMER                      "S_DIMMER"
-#define S_COVER                       "S_COVER"
-#define S_TEMPERATURE                 "S_TEMPERATURE"
-#define S_HUMIDITY                    "S_HUMIDITY" 
-#define S_RAIN                        "S_RAIN"
-#define S_WEIGHT                      "S_WEIGHT"
-#define S_POWER                       "S_POWER"
-#define S_HEATER                      "S_HEATER"
-#define S_DISTANCE                    "S_DISTANCE"
-#define S_LOCK                        "S_LOCK"
-#define S_IR                          "S_IR"
-#define S_WATER                       "S_WATER"
-#define S_CUSTOM                      "S_CUSTOM"
-#define S_DUST                        "S_DUST"
-#define S_RGB_LIGHT                   "S_RGB"
-#define S_INFORMATION                 "S_INFORMATION"
-#define S_GAS                         "S_GAS"
-#define S_GPS                         "S_GPS"
-#define S_ARDUINO_NODE                "S_ARDUINO_NODE"
-#define S_TEMP                        "S_TEMP"
-#define S_MULTIMETER                  "S_MULTIMETER"
-#define S_MEMORY                      "S_MEMORY"
-#define S_CPU                         "S_CPU"
-#define S_DISK                        "S_DISK"
+#define BC_NODE                       "NODE_BC"           //node id - broadcast
+#define BC_SENSOR                     "SENSOR_BC"         //sensor id - broadcast
+  
+//Command types 
+#define C_INTERNAL                    "C_INTERNAL"        //This is a special internal message. See table below for the details
+#define C_PRESENTATION                "C_PRESENTATION"    //Sent by a node when they present attached sensors.
+#define C_REQ                         "C_REQ"             //Requests a variable value (usually from an actuator destined for controller).
+#define C_SET                         "C_SET"             //This message is sent from or to a sensor when a sensor value should be updated
+#define C_STREAM                      "C_STREAM"          //Used for OTA firmware updates
+  
+//Command [C_PRESENTATION] options  
+#define S_ARDUINO_NODE                "S_ARDUINO_NODE"    //Arduino node device
+#define S_BINARY                      "S_BINARY"          //Binary device(on/off).
+#define S_COVER                       "S_COVER"           //Window covers or shades
+#define S_CPU                         "S_CPU"             //Raspberry PI CPU
+#define S_CUSTOM                      "S_CUSTOM"          //Use this for custom sensors where no other fits.
+#define S_DIMMER                      "S_DIMMER"          //Dimmable device of some kind
+#define S_DISK                        "S_DISK"            //Raspberry PI Disk
+#define S_DISTANCE                    "S_DISTANCE"        //Distance sensor
+#define S_DOOR                        "S_DOOR"            //Door and window sensors.
+#define S_DUST                        "S_DUST"            //Dust level sensor
+#define S_GAS                         "S_GAS"             //Gas meter
+#define S_GPS                         "S_GPS"             //GPS Sensor
+#define S_HEATER                      "S_HEATER"          //Heater device
+#define S_HUMIDITY                    "S_HUMIDITY"        //Humidity sensor
+#define S_INFORMATION                 "S_INFORMATION"     //LCD text device
+#define S_IR                          "S_IR"              //IR sender/receiver device
+#define S_LOCK                        "S_LOCK"            //Lock device
+#define S_MEMORY                      "S_MEMORY"          //Raspberry PI device memory
+#define S_MOTION                      "S_MOTION"          //Motion sensors.
+#define S_MULTIMETER                  "S_MULTIMETER"      //Multimeter device
+#define S_POWER                       "S_POWER"           //Power measuring device, like power meters
+#define S_RAIN                        "S_RAIN"            //Rain sensor
+#define S_RGB_LIGHT                   "S_RGB"             //RGB light
+#define S_SMOKE                       "S_SMOKE"           //Smoke sensor.
+#define S_TEMPERATURE                 "S_TEMPERATURE"     //Temperature sensor
+#define S_WATER                       "S_WATER"           //Water meter, volume
+#define S_WEIGHT                      "S_WEIGHT"          //Weight sensor for scales etc.
+  
+//Command [C_SET] and [C_REQ] options 
+#define V_ARMED                       "V_ARMED"           //Armed status of a security sensor. 1=Armed, 0=Bypassed
+#define V_COUNT                       "V_COUNT"           //Count
+#define V_CURRENT                     "V_CURRENT"         //Current level
+#define V_CUSTOM                      "V_CUSTOM"          //Custom messages used for controller/inter node specific commands, preferably using S_CUSTOM device type.
+#define V_DISTANCE                    "V_DISTANCE"        //Distance
+#define V_DOWN                        "V_DOWN"            //Window covering. Down.
+#define V_FORECAST                    "V_FORCAST"         //Whether forecast. One of "stable", "sunny", "cloudy", "unstable", "thunderstorm" or "unknown"
+#define V_FREE                        "V_FREE"            //Free amount
+#define V_HUMIDITY                    "V_HUM"             //Humidity
+#define V_HVAC_FLOW_MODE              "V_HVAC_FLOW_MODE"  //Flow mode for HVAC ("Auto", "ContinuousOn", "PeriodicOn")
+#define V_HVAC_FLOW_STATE             "V_HVAC_FLOW_STATE" //Mode of header. One of "Off", "HeatOn", "CoolOn", or "AutoChangeOver"
+#define V_HVAC_SPEED                  "V_HVAC_SPEED"      //HVAC/Heater fan speed ("Min", "Normal", "Max", "Auto")
+#define V_ID                          "V_ID"              //Optional unique sensor id (e.g. OneWire DS1820b ids)
+#define V_IMPEDANCE                   "V_IMPEDANCE"       //Impedance value
+#define V_IR_RECEIVE                  "V_IR_RECIVE"       //This message contains a received IR-command
+#define V_IR_SEND                     "V_IR_SEND"         //Send out an IR-command
+#define V_KWH                         "V_KWH"             //Accumulated number of KWH for a power meter
+#define V_LEVEL                       "V_LEVEL"           //Used for sending level-value
+#define V_PERCENTAGE                  "V_PERCENTAGE"      //Percentage value. 0-100 (%)
+#define V_POSITION                    "V_POSITION"        //GPS position and altitude. Payload: latitude;longitude;altitude(m). E.g. "55.722526;13.017972;18"
+#define V_PRESSURE                    "V_PRESSURE"        //Atmospheric Pressure or any other
+#define V_RATE                        "V_RAIN"            //Amount of rain
+#define V_RATE                        "V_RATE"            //Rate of rain, other rate
+#define V_RGB                         "V_RGB"             //RGB value transmitted as ASCII hex string (I.e "#ff0000" for red)
+#define V_RGBW                        "V_RGBW"            //RGBW value transmitted as ASCII hex string (I.e "#ff0000ff" for red + full white)
+#define V_SETPOINT_COOL               "V_SETPOINT_COOL"   //Cold setpoint
+#define V_SETPOINT_HEAT               "V_SETPOINT_HEAT"   //Heater setpoint
+#define V_STATUS                      "V_STATUS"          //Binary status. 0=off 1=on
+#define V_STOP                        "V_STOP"            //Window covering. Stop.
+#define V_TEMPERATURE                 "V_TEMP"            //Temperature
+#define V_TEXT                        "V_TEXT"            //Text message to display on LCD or controller device
+#define V_TOTAL                       "V_TOTAL"           //Total amount
+#define V_TRIPPED                     "V_TRIPPED"         //Tripped status of a security sensor. 1=Tripped, 0=Untripped
+#define V_UP                          "V_UP"              //Window covering. Up.
+#define V_USED                        "V_USED"            //Used amount
+#define V_VA                          "V_VA"              //Apparent power: volt-ampere (VA)
+#define V_VAR1                        "V_VAR1"            //Custom value
+#define V_VAR2                        "V_VAR2"            //Custom value
+#define V_VAR3                        "V_VAR3"            //Custom value
+#define V_VAR4                        "V_VAR4"            //Custom value
+#define V_VAR5                        "V_VAR5"            //Custom value
+#define V_VAR                         "V_VAR"             //Reactive power: volt-ampere reactive (var)
+#define V_VOLTAGE                     "V_VOLTAGE"         //Voltage level
+#define V_VOLUME                      "V_VOLUME"          //Water volume
+#define V_WATT                        "V_WATT"            //Watt value for power meters
+#define V_WEIGHT                      "V_WEIGHT"          //Weight (for scales etc)
 
-#define V_TEMP                        "V_TEMP"
-#define V_HUM                         "V_HUM"
-#define V_STATUS                      "V_STATUS"
-#define V_LIGHT                       "V_LIGHT"
-#define V_PERCENTAGE                  "V_PERCENTAGE"
-#define V_PRESSURE                    "V_PRESSURE"
-#define V_FORECAST                    "V_FORCAST"
-#define V_RATE                        "V_RAIN"
-#define V_RATE                        "V_RATE"
-#define V_WEIGHT                      "V_WEIGHT"
-#define V_DISTANCE                    "V_DISTANCE"
-#define V_IMPEDANCE                   "V_IMPEDANCE"
-#define V_ARMED                       "V_ARMED"
-#define V_TRIPPED                     "V_TRIPPED"
-#define V_WATT                        "V_WATT"
-#define V_KWH                         "V_KWH"
-#define V_HVAC_FLOW_STATE             "V_HVAC_FLOW_STATE"
-#define V_HVAC_SPEED                  "V_HVAC_SPEED"
-#define V_VAR1                        "V_VAR1"
-#define V_VAR2                        "V_VAR2"
-#define V_VAR3                        "V_VAR3"
-#define V_VAR4                        "V_VAR4"
-#define V_VAR5                        "V_VAR5"
-#define V_UP                          "V_UP"
-#define V_DOWN                        "V_DOWN"
-#define V_STOP                        "V_STOP"
-#define V_IR_SEND                     "V_IR_SEND"
-#define V_IR_RECEIVE                  "V_IR_RECIVE"
-#define V_VOLUME                      "V_VOLUME"
-#define V_LEVEL                       "V_LEVEL"
-#define V_VOLTAGE                     "V_VOLTAGE"
-#define V_CURRENT                     "V_CURRENT"
-#define V_RGB                         "V_RGB"
-#define V_RGBW                        "V_RGBW"
-#define V_ID                          "V_ID"
-#define V_UID                         "V_UID"
-#define V_SETPOINT_COOL               "V_SETPOINT_COOL"  
-#define V_SETPOINT_HEAT               "V_SETPOINT_HEAT"
-#define V_HVAC_FLOW_MODE              "V_HVAC_FLOW_MODE"
-#define V_TEXT                        "V_TEXT"
-#define V_CUSTOM                      "V_CUSTOM"
-#define V_POSITION                    "V_POSITION"
-#define V_VAR                         "V_VAR"
-#define V_VA                          "V_VA"
-#define V_POWER_FACTOR                "V_PF"
-#define V_USED                        "V_USED"
-#define V_FREE                        "V_FREE"
-#define V_TOTAL                       "V_TOTAL"
-#define V_COUNT                       "V_COUNT"
-#define V_RATE                        "V_RATE"
+//Command [C_INTERNAL] options
+#define I_BATTERY_LEVEL               "I_BATTERY_LEVEL"       //Use this to report the battery level (in percent 0-100).
+#define I_DEBUG                       "I_DEBUG"               //Debug message
+#define I_FACTORY_RESET               "I_FACTORY_RESET"       //Do factory reset of node
+#define I_HEARTBEAT_REQUEST           "I_HEARTBEAT"           //Heartbeat request
+#define I_HEARTBEAT_RESPONSE          "I_HEARTBEAT_RESPONSE"  //Heartbeat response
+#define I_ID_RESPONSE                 "I_ID_RESPONSE"         //Id response back to node. Payload contains node id.
+#define I_LOG_MESSAGE                 "I_LOG_MESSAGE"         //Sent by the gateway to the Controller to trace-log a message
+#define I_PING                        "I_PING"                //Ping sent to node, payload incremental hop counter
+#define I_PONG                        "I_PONG"                //In return to ping, sent back to sender, payload incremental hop counter
+#define I_PRESENTATION                "I_PRESENTATION"        //Presentation message
+#define I_PROPERTIES                  "I_PROPERTIES"          //Properties from node. will be displayed on Node properties of GUI
+#define I_REBOOT                      "I_REBOOT"              //Used by OTA firmware updates. Request for node to reboot.
+#define I_RSSI                        "I_RSSI"                //RSSI value of node
+#define I_SKETCH_NAME                 "I_SKETCH_NAME"         //Optional sketch name that can be used to identify sensor in the Controller GUI
+#define I_SKETCH_VERSION              "I_SKETCH_VERSION"      //Optional sketch version that can be reported to keep track of the version of sensor in the Controller GUI.
+#define I_TIME                        "I_TIME"                //Sensors can request the current time from the Controller using this message. The time will be reported as the seconds since 1970
+#define I_VERSION                     "I_VERSION"             //Used to request gateway version from controller.
 
-
-#define I_BATTERY_LEVEL               "I_BATTERY_LEVEL"
-#define I_LOG_MESSAGE                 "I_LOG_MESSAGE"
-#define I_TIME                        "I_TIME"
-#define I_VERSION                     "I_VERSION"
-#define I_SKETCH_NAME                 "I_SKETCH_NAME"
-#define I_SKETCH_VERSION              "I_SKETCH_VERSION"
-#define I_REBOOT                      "I_REBOOT"
-#define I_HEARTBEAT                   "I_HEARTBEAT"
-#define I_HEARTBEAT_RESPONSE          "I_HEARTBEAT_RESPONSE"
-#define I_PRESENTATION                "I_PRESENTATION"
-#define I_PING                        "I_PING"
-#define I_PONG                        "I_PONG"
-#define I_DEBUG                       "I_DEBUG"
-#define I_RSSI                        "I_RSSI"
-#define I_PROPERTIES                  "I_PROPERTIES"
-#define I_ID_RESPONSE                 "I_ID_RESPONSE"
-#define I_FACTORY_RESET               "I_FACTORY_RESET"
-
-#define ST_FIRMWARE_CONFIG_REQUEST    "ST_FIRMWARE_CONFIG_REQUEST"
-#define ST_FIRMWARE_CONFIG_RESPONSE   "ST_FIRMWARE_CONFIG_RESPONSE"
-#define ST_FIRMWARE_REQUEST           "ST_FIRMWARE_REQUEST"
-#define ST_FIRMWARE_RESPONSE          "ST_FIRMWARE_RESPONSE"
-#define ST_SOUND                      "ST_SOUND"
-#define ST_IMAGE                      "ST_IMAGE"
+//Command [C_STREAM] options
+#define ST_FIRMWARE_CONFIG_REQUEST    "ST_FIRMWARE_CONFIG_REQUEST"  //Request new FW, payload contains current FW details
+#define ST_FIRMWARE_CONFIG_RESPONSE   "ST_FIRMWARE_CONFIG_RESPONSE" //New FW details to initiate OTA FW update
+#define ST_FIRMWARE_REQUEST           "ST_FIRMWARE_REQUEST"         //Request FW block
+#define ST_FIRMWARE_RESPONSE          "ST_FIRMWARE_RESPONSE"        //Response FW block
+#define ST_IMAGE                      "ST_IMAGE"                    //Image
+#define ST_SOUND                      "ST_SOUND"                    //Sound
 
 
 //ACK related flags
