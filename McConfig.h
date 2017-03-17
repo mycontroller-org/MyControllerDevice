@@ -32,6 +32,8 @@
 //#define ENABLE_DEBUG
 //#define ENABLE_TRACE
 
+// Customize NodeEui. Not recommended. Uses default chip id as nodeEui
+//#define NODE_EUI "my_esp_node"
 
 // Disable serial port completely
 //#define MC_DISABLED_SERIAL
@@ -40,7 +42,7 @@
 #define MC_SERIAL Serial
 #define SERIAL_BAUD_RATE 115200
 
-// Enable vcc pin
+// Enable vcc pin, If you want to use A0 for your sketch. disable this line.
 #define ENABLE_READ_VCC
 
 // When there is no configurations updated, this device will create AP to update configuration via mobile/computer
@@ -51,16 +53,17 @@
 // Define factory reset pin.
 // You can configure any pin for factory reset. When you cannot access your device,
 // You reset your device settings and ask to produce AP to update new settings
-//#define FACTORY_RESET_PIN 0
-#define FACTORY_RESET_PIN_STATE 0
-#define FACTORY_RESET_TIME 1000*9  //hold the button 9 seconds
+//#define FACTORY_RESET_PIN 0       //Pin number used for this function. If pin number disabled. This function will be disabled
+#define FACTORY_RESET_PIN_STATE 0   //0 >> GND, 1 >> Vcc
+#define FACTORY_RESET_TIME 1000*5   //hold the button 9 seconds
 
 // MQTT settings, You can leave this as default. Until you do not need any change
 // Default settings
-#define FEED_ID "mc" //Maximum allowed length 5 chars. will be used as topic to publich and subscribe
-#define MQTT_BROKER_HOSTNAME "cloud.mycontroller.org" //MyController server ip
-#define MQTT_BROKER_PORT 1883
-//#define MQTT_SSL_ENABLED
+#define FEED_ID "esp" //Maximum allowed length 5 chars. will be used as topic to publich and subscribe. Default "esp"
+#define MQTT_BROKER_HOSTNAME "cloud.mycontroller.org" //MQTT broker ip
+#define MQTT_BROKER_PORT 1883 //MQTT broker port, default 1883, for SSL 8883
+//#define MQTT_SSL_ENABLED  //Enable SSL support for MQTT
+//#define ENABLE_MQTT_MDNS  //Enable auto discover support for MQTT
 
 #define MC_LIB_VERSION "1.0.0"
 #define MAX_OTA_PAYLOAD 200
@@ -70,7 +73,7 @@
 #define MQTT_MAX_PACKET_SIZE 512 //This one is not working have to check it
 
 
-/* NO NEED TO TOUCH FROM HERE */
+/* WARNING: NO NEED TO TOUCH FROM HERE */
 /* ***************************************************************************** */
 
 // Turn off debug if serial pins is used for other stuff

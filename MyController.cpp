@@ -53,6 +53,7 @@ bool _fwUpdateRunning = false;
 long _fwUpdateMillis = 0;
 unsigned long _lastMqttLoopRun = millis();
 bool _mqttClientInit = false;
+SimpleTimer timer; // Create a Timer object called "timer"! 
 
 char* getNodeEui(){
   return &nodeEui[0];
@@ -60,6 +61,18 @@ char* getNodeEui(){
 
 MyController::MyController() {
 }
+
+void printFreeHeap(){
+  #ifdef ENABLE_TRACE
+    MC_SERIAL.printf("MC[T]: FreeHeap:%d\n", ESP.getFreeHeap());
+  #endif
+}
+void updateInternalJobs(){
+  #ifdef ENABLE_TRACE
+    timer.setInterval(1000L * 5, printFreeHeap); //  Here you set interval and which function to call
+  #endif
+}
+
 
 #ifdef ENABLE_DEBUG
   long milliOld = millis();
@@ -69,12 +82,6 @@ void MyController::loop() {
   if(!init_done){
     initialize();
   }
-  #ifdef ENABLE_TRACE
-    if((millis() - milliOld) >= 5000){
-      MC_SERIAL.printf("MC[T]: FreeHeap:%d\n", ESP.getFreeHeap());
-      milliOld = millis();
-    }    
-  #endif
   if (!mqttClient.connected()) {
   #ifdef ENABLE_INFO
     MC_SERIAL.printf("MC[I]: MQTT failed! Retryting to connect...\n");
@@ -85,10 +92,6 @@ void MyController::loop() {
     _lastMqttLoopRun = millis();
   }
   checkTasks();
-}
-
-bool discoverMyControllerServer(){
-  
 }
 
 bool MyController::initialize() {
@@ -108,7 +111,8 @@ bool MyController::initialize() {
   #ifdef NODE_EUI
     strcpy(nodeEui, NODE_EUI);
   #else
-    strcpy(nodeEui, WiFi.hostname().c_str());
+    sprintf(nodeEui, "ESP_%06X", ESP.getChipId());
+    //strcpy(nodeEui, WiFi.hostname().c_str());
   #endif
   updateConfigFromEEPROM();
   init_done = true;
@@ -123,6 +127,7 @@ bool MyController::initialize() {
   #ifdef ENABLE_INFO
     MC_SERIAL.printf("MC[I]: Initialization done...\n");
   #endif
+  updateInternalJobs();
 }
 
 void mcDelay(long ms){
@@ -139,6 +144,7 @@ void checkTasks(){
     checkFactoryResetPin();
   #endif
   checkFirmwareUpgrade();
+  timer.run(); // SimpleTimer is working
 }
 
 void checkFactoryResetPin(){
@@ -272,6 +278,7 @@ void MyController::connectWiFi(){
 
 //Load mqtt configurations
 void MyController::loadMqttConfig() {
+  #ifdef ENABLE_MQTT_MDNS
     //If MQTT init done, no need to follow MQTT setup
     if(_mqttClientInit && mDNSstatus == MDNS_DISABLED){
       return;
@@ -327,6 +334,13 @@ void MyController::loadMqttConfig() {
       _mqttPort = hwReadConfigInteger(EEPROM_INTERNAL_ADDR_MQTT_PORT);
       hwReadConfigBlock((void *)_mqttServer, (void *)EEPROM_INTERNAL_ADDR_MQTT_SERVER, 51);
     }
+  #else //ENABLE_MQTT_MDNS
+    if(_mqttClientInit && mDNSstatus == MDNS_DISABLED){
+      return;
+    }
+    _mqttPort = hwReadConfigInteger(EEPROM_INTERNAL_ADDR_MQTT_PORT);
+    hwReadConfigBlock((void *)_mqttServer, (void *)EEPROM_INTERNAL_ADDR_MQTT_SERVER, 51);
+  #endif //ENABLE_MQTT_MDNS
     hwReadConfigBlock((void *)_mqttUser, (void *)EEPROM_INTERNAL_ADDR_MQTT_USERNAME, 16);
     hwReadConfigBlock((void *)_mqttPwd, (void *)EEPROM_INTERNAL_ADDR_MQTT_PASSWORD, 16);
      //update MQTT client details
@@ -395,7 +409,7 @@ void MyController::checkMqtt() {
     #ifdef ENABLE_DEBUG
       MC_SERIAL.printf("MC[D]: Try again in 3 seconds\n");
     #endif
-    // Wait 3 seconds before retrying
+    // Try again after 3 seconds
     mcDelay(3000);
   }
   delay(10);
@@ -760,7 +774,11 @@ void handleSubmit(){
   }else if(_feed.length() == 0){
     _feed = "esp";  //If feed lenght is ZERO, take "esp" as default feed
   }else if(_port.length() == 0){
-    _port = "1883"; //If port lenght is ZERO, take "1883" as default port
+    #ifdef MQTT_SSL_ENABLED
+      _port = "8883"; //If port lenght is ZERO, take "8883" as default port, SSL
+    #else
+      _port = "1883"; //If port lenght is ZERO, take "1883" as default port
+    #endif
   }
 
   if(status){   
