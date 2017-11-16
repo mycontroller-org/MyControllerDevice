@@ -47,7 +47,7 @@ DallasTemperature tempSensors(&oneWire);
 MyController mc;
 
 // Create a Timer object called "timer"! 
-SimpleTimer timer;
+// SimpleTimer timer; // <-- Already defined in core library. use it as is
 
 void sendTemperature(){
   tempSensors.requestTemperatures(); // Send the command to get temperatures
