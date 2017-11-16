@@ -385,7 +385,7 @@ void MyController::checkMqtt() {
       #ifdef ENABLE_INFO
         MC_SERIAL.printf("MC[I]: MQTT authenticating as user:[%s]\n", _mqttUser);
       #endif
-      mqttClient.connect(WiFi.hostname().c_str(), _mqttUser, _mqttUser);
+      mqttClient.connect(WiFi.hostname().c_str(), _mqttUser, _mqttPwd);
     }
     if (mqttClient.connected()) {
       #ifdef ENABLE_INFO
