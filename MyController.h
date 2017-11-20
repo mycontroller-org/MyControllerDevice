@@ -68,6 +68,7 @@ bool isMqttConnected();
 bool isWifiConnected();
 void checkFirmwareUpgrade();
 void parseBytes(const char* str, char sep, byte* bytes, int maxBytes, int base);
+void sendInitialStatus();
 
 void configSetupManager();
 void handleInfo();
@@ -133,6 +134,7 @@ extern char _mqttPwd[16];
 extern bool _fwUpdateRunning;
 extern long _fwUpdateMillis;
 extern SimpleTimer timer;
+extern bool initialStatusSent;
 
 class MyController {
 private:

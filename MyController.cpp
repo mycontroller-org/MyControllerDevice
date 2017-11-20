@@ -54,6 +54,7 @@ long _fwUpdateMillis = 0;
 unsigned long _lastMqttLoopRun = millis();
 bool _mqttClientInit = false;
 SimpleTimer timer; // Create a Timer object called "timer"! 
+bool initialStatusSent = false;
 
 char* getNodeEui(){
   return &nodeEui[0];
@@ -118,16 +119,22 @@ bool MyController::initialize() {
   init_done = true;
   WiFi.mode(WIFI_STA);
   checkMqtt();
-  if(mqttClient.connected()){
-    before();
-    sendRSSI();
-    sendStatistics();
-    mcPresentation();
-  }
   #ifdef ENABLE_INFO
     MC_SERIAL.printf("MC[I]: Initialization done...\n");
   #endif
   updateInternalJobs();
+}
+
+// Send presentation and other details to MyController one time.
+void sendInitialStatus(){
+  if(!mqttClient.connected() || initialStatusSent){
+    return;
+  }
+  before();
+  sendRSSI();
+  sendStatistics();
+  mcPresentation();
+  initialStatusSent = true;
 }
 
 void mcDelay(long ms){
@@ -399,6 +406,7 @@ void MyController::checkMqtt() {
         MC_SERIAL.printf("MC[I]: MQTT topic subscribed:[%s]\n", _topic);
       #endif
       skip = true;
+      sendInitialStatus();
     } else {
       #ifdef ENABLE_INFO
         MC_SERIAL.printf("MC[I]: MQTT connection failed, rc=%d\n", mqttClient.state());
@@ -647,6 +655,14 @@ void reboot(){
   #ifdef ENABLE_INFO
     MC_SERIAL.printf("MC[I]: Rebooting...\n");
   #endif
+  // Disconnect MQTT if it is connected
+  if(mqttClient.connected()){
+    mqttClient.disconnect ();
+  }
+  // Disconnect WiFi , if it is connected
+  if (WiFi.status() == WL_CONNECTED){
+    WiFi.disconnect();
+  }
   ESP.restart();
 }
 
