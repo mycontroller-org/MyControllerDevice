@@ -1,11 +1,11 @@
 = MyControllerDevice
 
-== About
-
-*MyControllerDevice* is network driver for embedded devices to communicate with MyController. You can make your own sensors network on top of embedded hardwares. Currently this library supports for ESP8266 via MQTT protocol
 
 **IMPOERTANT**: For now this library supports up to `ESP 8266 community version: 2.3.0` If you compile with `2.4.0` or greater version. This code will not work as expected.
 
+== About
+
+*MyControllerDevice* is network driver for embedded devices to communicate with MyController. You can make your own sensors network on top of embedded hardwares. Currently this library supports for ESP8266 via MQTT protocol
 
 === Dependencies
 When you compile you have to change the following settings on dependencies,
