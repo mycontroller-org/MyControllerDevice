@@ -56,6 +56,10 @@ bool _mqttClientInit = false;
 SimpleTimer timer; // Create a Timer object called "timer"! 
 bool initialStatusSent = false;
 
+// message buffers
+McMessage _msg;       // Buffer for incoming messages
+McMessage _msgTmp;    // Buffer for temporary messages (acks and others)
+
 char* getNodeEui(){
   return &nodeEui[0];
 }
@@ -425,7 +429,6 @@ void MyController::checkMqtt() {
 
 //MQTT on _msg received
 void mqttMsgReceived(char* topic, byte* payload, unsigned int length) {
-  McMessage _msg;
   #ifdef ENABLE_DEBUG
     MC_SERIAL.printf("MC[D]: Message arrived on topic[%s]\n", topic);
   #endif
@@ -435,8 +438,11 @@ void mqttMsgReceived(char* topic, byte* payload, unsigned int length) {
   #endif
   if(_msg.isValid()){
     if(_msg.isAckRequest()){
-      send(_msg.setAck(ACK_RESPONSE));
-      _msg.ack = NO_ACK; //Reset ack status
+      _msgTmp.update(_msg.sensorId, _msg.type, _msg.subType);
+      send(_msgTmp.setAck(ACK_RESPONSE));
+      #ifdef ENABLE_DEBUG
+        MC_SERIAL.printf("MC[D]: Ack sent for [sensorId:%s, type:%s, subType:%s]\n", _msgTmp.sensorId, _msgTmp.type, _msgTmp.subType);
+      #endif
     }else if(_msg.isAckResponse()){
       //This ack response message. Just ignore for other than SET, REQ
       if(_msg.isTypeOf(C_SET) || _msg.isTypeOf(C_REQ)){
@@ -540,9 +546,9 @@ void mqttMsgReceived(char* topic, byte* payload, unsigned int length) {
         fwRequest.type = _fc->type;
         fwRequest.version = _fc->version;
         fwRequest.block = 0;
-        _msg.setSubType(ST_FIRMWARE_REQUEST);
-        _msg.set(&fwRequest, sizeof(RequestFWBlock));
-        send(_msg);
+        _msgTmp.update(BC_SENSOR, C_STREAM, ST_FIRMWARE_REQUEST);
+        _msgTmp.set(&fwRequest, sizeof(RequestFWBlock));
+        send(_msgTmp);
         #ifdef ENABLE_INFO
           MC_SERIAL.printf("MC[I]: Firmware upgrade started...\n");
         #endif
@@ -578,43 +584,38 @@ void mqttMsgReceived(char* topic, byte* payload, unsigned int length) {
           }
         }else{
           fwRequest.block++;
-          _msg.setSubType(ST_FIRMWARE_REQUEST);
-          _msg.set(&fwRequest, sizeof(RequestFWBlock));
-          send(_msg);         
+          _msgTmp.update(BC_SENSOR, C_STREAM, ST_FIRMWARE_REQUEST);
+          _msgTmp.set(&fwRequest, sizeof(RequestFWBlock));
+          send(_msgTmp);         
         }
       }     
     }
   }
 }
 void requestTime(){
-  McMessage _message;
-  _message.update(BC_SENSOR, C_INTERNAL, I_TIME);
-  send(_message.set(0));
+  _msgTmp.update(BC_SENSOR, C_INTERNAL, I_TIME);
+  send(_msgTmp.set(0));
 }
 
 void sendBatteryLevel(float level){
-  McMessage _message;
-  _message.update(BC_SENSOR, C_INTERNAL, I_BATTERY_LEVEL);
-  send(_message.set(level, 3));
+  _msgTmp.update(BC_SENSOR, C_INTERNAL, I_BATTERY_LEVEL);
+  send(_msgTmp.set(level, 3));
 }
 
 void sendRSSI(){
-  McMessage _message;
-  _message.update(BC_SENSOR, C_INTERNAL, I_RSSI);
+  _msgTmp.update(BC_SENSOR, C_INTERNAL, I_RSSI);
   char _rssi[21];
   snprintf_P(_rssi, 20, "%d dBm", WiFi.RSSI());
-  send(_message.set(_rssi));
+  send(_msgTmp.set(_rssi));
 }
 
 void sendLogMessage(char *logMessage){
-  McMessage _message;
-  _message.update(BC_SENSOR, C_INTERNAL, I_LOG_MESSAGE);
-  send(_message.set(logMessage));
+  _msgTmp.update(BC_SENSOR, C_INTERNAL, I_LOG_MESSAGE);
+  send(_msgTmp.set(logMessage));
 }
 
 void sendStatistics(){
-  McMessage _message;
-  _message.update(BC_SENSOR, C_INTERNAL, I_PROPERTIES);
+  _msgTmp.update(BC_SENSOR, C_INTERNAL, I_PROPERTIES);
   char _payload[MAX_PAYLOAD];
   //Part 1
   #ifdef ENABLE_READ_VCC
@@ -625,12 +626,12 @@ void sendStatistics(){
       ESP.getFreeHeap(), ESP.getChipId(), ESP.getFlashChipSize(), ESP.getFlashChipRealSize(), ESP.getFlashChipSpeed(), ESP.getCycleCount(), WiFi.localIP().toString().c_str());
   #endif
 
-  send(_message.set(_payload));
+  send(_msgTmp.set(_payload));
   
   //Part 2
   snprintf_P(_payload, MAX_PAYLOAD, "subnetMask=%s;gatewayIP=%s;macAddress=%s;ssid=%s;hostname=%s;bssid=%s;rssi=%d dBm;rssiAsQuality=%d",
     WiFi.subnetMask().toString().c_str(), WiFi.gatewayIP().toString().c_str(), WiFi.macAddress().c_str(), WiFi.SSID().c_str(), WiFi.hostname().c_str(), WiFi.BSSIDstr().c_str(), WiFi.RSSI(), getRSSIasQuality(WiFi.RSSI()));
-  send(_message.set(_payload));
+  send(_msgTmp.set(_payload));
 }
 
 bool isMqttConnected(){
@@ -942,38 +943,34 @@ bool send(McMessage &message){
 }
 
 void request(char* sensorId, char* subType){
-  McMessage message;
-  message.update(sensorId, C_REQ, subType);
-  message.set(PAYLOAD_NULL);
-  send(message);
+  _msgTmp.update(sensorId, C_REQ, subType);
+  _msgTmp.set(PAYLOAD_NULL);
+  send(_msgTmp);
 }
 
 void present(char* subType, char* sensorId, char* _name){
-  McMessage message;
-  message.update(sensorId, C_PRESENTATION, subType);
+  _msgTmp.update(sensorId, C_PRESENTATION, subType);
   if(_name){
-      message.set(_name);
+      _msgTmp.set(_name);
   }else{
-      message.set(PAYLOAD_NULL);
+      _msgTmp.set(PAYLOAD_NULL);
   }
-  send(message);
+  send(_msgTmp);
 }
 
 void sendSketchInfo(char* name, char* version){
-  McMessage message;
-  message.update(BC_SENSOR, C_INTERNAL, I_SKETCH_NAME);
-  message.set(name);
-  send(message);
-  message.setSubType(I_SKETCH_VERSION);
-  message.set(version);
-  send(message);
+  _msgTmp.update(BC_SENSOR, C_INTERNAL, I_SKETCH_NAME);
+  _msgTmp.set(name);
+  send(_msgTmp);
+  _msgTmp.setSubType(I_SKETCH_VERSION);
+  _msgTmp.set(version);
+  send(_msgTmp);
 }
 
 void mcPresentation(){
-  McMessage message;
-  message.update(BC_SENSOR, C_PRESENTATION, S_ARDUINO_NODE);
-  message.set(MC_LIB_VERSION);
-  send(message);
+  _msgTmp.update(BC_SENSOR, C_PRESENTATION, S_ARDUINO_NODE);
+  _msgTmp.set(MC_LIB_VERSION);
+  send(_msgTmp);
   //Call user's presentation
   presentation();
 }

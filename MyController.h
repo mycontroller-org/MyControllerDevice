@@ -136,6 +136,10 @@ extern long _fwUpdateMillis;
 extern SimpleTimer timer;
 extern bool initialStatusSent;
 
+// message buffers
+extern McMessage _msg;       // Buffer for incoming messages
+extern McMessage _msgTmp;    // Buffer for temporary messages (acks and nonces among others)
+
 class MyController {
 private:
   void connectWiFi();

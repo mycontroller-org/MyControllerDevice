@@ -208,7 +208,8 @@ typedef enum {
 #define miSetLength(_length) BF_SET(message_internal, _length, 3, 8) //!< Internal setter for length field
 #define miGetLength() ((uint16_t)BF_GET(message_internal, 3, 8)) //!< Internal getter for length field
 
-
+int max (int a, int b);
+int min (int a, int b);
 
 class McMessage {
 private:
@@ -249,7 +250,7 @@ public:
   McMessage& setSensorId(char *sensorId);
   McMessage& setType(char *type);
   McMessage& setSubType(char *subType);
-  McMessage& update(char *_sensorId, char *_type, char *_subType);
+  McMessage& update(char *_sensorId, char *_type, char *_subType, int8_t ack=NO_ACK);
   bool isTypeOf(char *type);
   bool isTypeOf(char *type, char *subType);
   bool isSubTypeOf(char *subType);
