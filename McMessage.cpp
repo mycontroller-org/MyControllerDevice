@@ -24,8 +24,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-int max (int a, int b) { return a > b ? a : b; }
-int min (int a, int b) { return a < b ? a : b; }
+int mmax (int a, int b) { return a > b ? a : b; }
+int mmin (int a, int b) { return a < b ? a : b; }
 
 McMessage::McMessage() {
   clear();
@@ -111,7 +111,7 @@ char* McMessage::getString(char *buffer) const {
     } else if (payloadType == P_ULONG32) {
       ultoa(ulValue, buffer, 10);
     } else if (payloadType == P_FLOAT32) {
-      dtostrf(fValue,2,min(fPrecision, 8),buffer);
+      dtostrf(fValue,2,mmin(fPrecision, 8),buffer);
     } else if (payloadType == P_CUSTOM) {
       return getCustomString(buffer);
     }
@@ -210,7 +210,7 @@ McMessage& McMessage::setSubType(char *_subType) {
 
 // Set payload
 McMessage& McMessage::set(void* value, uint8_t length) {
-  uint8_t payloadLength = value == NULL ? 0 : min(length, MAX_PAYLOAD);
+  uint8_t payloadLength = value == NULL ? 0 : mmin(length, MAX_PAYLOAD);
   miSetLength(payloadLength); 
   miSetPayloadType(P_CUSTOM);
   memcpy(data, value, payloadLength);
@@ -218,7 +218,7 @@ McMessage& McMessage::set(void* value, uint8_t length) {
 }
 
 McMessage& McMessage::set(const char* value) {
-  uint8_t length = value == NULL ? 0 : min(strlen(value), MAX_PAYLOAD);
+  uint8_t length = value == NULL ? 0 : mmin(strlen(value), MAX_PAYLOAD);
   miSetLength(length);
   miSetPayloadType(P_STRING);
   if (length) {    
